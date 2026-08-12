@@ -8,7 +8,9 @@
       {
         "caminho": "Pack01",
         "formato": "json",
-        "campos": []
+        "campos": [
+          "msg_string"
+        ]
       }
     ]
   }
