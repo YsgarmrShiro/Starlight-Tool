@@ -4,6 +4,12 @@
     "owner": "YsgarmrShiro",
     "repo": "Teste",
     "branch": "main",
-    "subpastas": []
+    "subpastas": [
+      {
+        "caminho": "Pack01",
+        "formato": "json",
+        "campos": []
+      }
+    ]
   }
 ]
