@@ -4,20 +4,11 @@
     "owner": "YsgarmrShiro",
     "repo": "Teste",
     "branch": "main",
-    "subpastas": []
-  },
-  {
-    "nome": "Atelier Ryza",
-    "owner": "YsgarmrShiro",
-    "repo": "Teste",
-    "branch": "main",
     "subpastas": [
       {
-        "caminho": "",
+        "caminho": "Pack01/event/event_en",
         "formato": "json",
-        "campos": [
-          "msg_string"
-        ]
+        "campos": []
       }
     ]
   }
