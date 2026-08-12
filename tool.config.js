@@ -7,7 +7,7 @@
    cadastrados) e presenca.json (quem está revisando o quê).
    ========================================================= */
 window.TOOL_REPO = {
-  owner: "SEU-USUARIO-OU-ORG",
-  repo: "SEU-REPOSITORIO-DA-FERRAMENTA",
+  owner: "YsgarmrShiro",
+  repo: "Starlight-Tool",
   branch: "main",
 };
