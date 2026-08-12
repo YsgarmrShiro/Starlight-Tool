@@ -6,9 +6,11 @@
     "branch": "main",
     "subpastas": [
       {
-        "caminho": "Pack01/event/event_en/mm00",
+        "caminho": "",
         "formato": "json",
-        "campos": []
+        "campos": [
+          "msg_string"
+        ]
       }
     ]
   }
