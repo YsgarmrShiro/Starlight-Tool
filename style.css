@@ -232,6 +232,12 @@ code{ background:var(--panel-alt); padding:1px 6px; border-radius:5px; font-fami
   .entry{ grid-template-columns:1fr; }
 }
 
+/* ===== MODAL ===== */
+.modal-overlay{ position:fixed; inset:0; background:rgba(5,6,12,0.7); backdrop-filter:blur(3px); display:flex; align-items:center; justify-content:center; z-index:100; padding:20px; }
+.modal-card{ background:var(--panel-solid); border:1px solid var(--border-strong); border-radius:var(--radius); padding:22px; max-width:400px; width:100%; box-shadow:0 20px 50px rgba(0,0,0,.5); }
+.modal-card p{ margin:0 0 18px; font-size:14px; line-height:1.5; color:var(--text); }
+.modal-actions{ display:flex; justify-content:flex-end; gap:8px; }
+
 /* ===== TOAST ===== */
 .toast{ position:fixed; bottom:24px; left:50%; transform:translateX(-50%); background:var(--panel-solid); border:1px solid var(--border); border-radius:var(--radius-sm); padding:11px 20px; font-size:13px; box-shadow:0 10px 34px rgba(0,0,0,.4); max-width:80vw; z-index:50; }
 .toast--error{ border-color:var(--danger); color:var(--danger); }

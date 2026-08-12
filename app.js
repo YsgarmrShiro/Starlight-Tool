@@ -30,6 +30,30 @@ function friendlyError(e) {
   return e.message || "Erro desconhecido.";
 }
 
+/* ---------------- modal de confirmação (substitui o confirm() nativo) ---------------- */
+function confirmDialog(message) {
+  return new Promise((resolve) => {
+    el("modalMessage").textContent = message;
+    el("modalOverlay").hidden = false;
+    const confirmBtn = el("modalConfirm");
+    const cancelBtn = el("modalCancel");
+    function cleanup(result) {
+      el("modalOverlay").hidden = true;
+      confirmBtn.removeEventListener("click", onConfirm);
+      cancelBtn.removeEventListener("click", onCancel);
+      resolve(result);
+    }
+    function onConfirm() {
+      cleanup(true);
+    }
+    function onCancel() {
+      cleanup(false);
+    }
+    confirmBtn.addEventListener("click", onConfirm);
+    cancelBtn.addEventListener("click", onCancel);
+  });
+}
+
 /* =========================================================
    TELAS
    ========================================================= */
@@ -159,7 +183,8 @@ function openGameForm(index) {
 
   form.querySelector(".gf-delete").addEventListener("click", async () => {
     if (index === null) return renderGamesList();
-    if (!confirm(`Remover "${game.nome}" do cadastro? Isso não apaga o repositório, só tira ele da ferramenta.`)) return;
+    const ok = await confirmDialog(`Remover "${game.nome}" do cadastro? Isso não apaga o repositório, só tira ele da ferramenta.`);
+    if (!ok) return;
     RT.state.games.splice(index, 1);
     await saveGames();
     renderGamesList();
@@ -228,16 +253,41 @@ function showBrowse() {
 }
 
 el("btnBackToBrowse").addEventListener("click", async () => {
-  if (RT.state.file?.dirty && !confirm("Há alterações não salvas. Sair mesmo assim?")) return;
+  if (RT.state.file?.dirty) {
+    const ok = await confirmDialog("Há alterações não salvas. Sair mesmo assim?");
+    if (!ok) return;
+  }
   await releasePresence();
-  if (RT.state.cur) renderSubpastasBrowse(RT.state.cur.gameIdx);
-  else showBrowse();
+  backToFileListing();
 });
+
+function backToFileListing() {
+  const c = RT.state.cur;
+  hideAllScreens();
+  el("screenBrowse").hidden = false;
+  if (c && c.subpasta && c.rows) {
+    el("btnBrowseBack").hidden = false;
+    renderCrumbs();
+    renderFolderLevel();
+  } else if (c) {
+    renderSubpastasBrowse(c.gameIdx);
+  } else {
+    showBrowse();
+  }
+}
 
 el("btnBrowseBack").addEventListener("click", () => {
   const c = RT.state.cur;
-  if (c && c.subpasta) renderSubpastasBrowse(c.gameIdx);
-  else showBrowse();
+  if (!c) return showBrowse();
+  if (c.folderPath && c.folderPath.length > 0) {
+    c.folderPath.pop();
+    renderCrumbs();
+    renderFolderLevel();
+  } else if (c.subpasta) {
+    renderSubpastasBrowse(c.gameIdx);
+  } else {
+    showBrowse();
+  }
 });
 
 function renderCrumbs() {
@@ -246,13 +296,33 @@ function renderCrumbs() {
   if (c) {
     const game = RT.state.games[c.gameIdx];
     parts.push(`<span class="crumb" data-nav="subpastas">${escapeHtml(game.nome)}</span>`);
-    if (c.subpasta) parts.push(`<span class="crumb-current">${escapeHtml(c.subpasta.caminho)}</span>`);
+    if (c.subpasta) {
+      parts.push(`<span class="crumb" data-nav="subroot">${escapeHtml(c.subpasta.caminho)}</span>`);
+      (c.folderPath || []).forEach((seg, i) => {
+        const isLast = i === c.folderPath.length - 1;
+        parts.push(
+          isLast
+            ? `<span class="crumb-current">${escapeHtml(seg)}</span>`
+            : `<span class="crumb" data-nav="folder" data-idx="${i}">${escapeHtml(seg)}</span>`
+        );
+      });
+    }
   }
   el("crumbs").innerHTML = parts.join('<span class="crumb-sep">/</span>');
   el("crumbs").querySelectorAll(".crumb").forEach((b) =>
     b.addEventListener("click", () => {
-      if (b.dataset.nav === "games") showBrowse();
-      else if (b.dataset.nav === "subpastas") renderSubpastasBrowse(RT.state.cur.gameIdx);
+      const nav = b.dataset.nav;
+      if (nav === "games") showBrowse();
+      else if (nav === "subpastas") renderSubpastasBrowse(RT.state.cur.gameIdx);
+      else if (nav === "subroot") {
+        RT.state.cur.folderPath = [];
+        renderCrumbs();
+        renderFolderLevel();
+      } else if (nav === "folder") {
+        RT.state.cur.folderPath = RT.state.cur.folderPath.slice(0, Number(b.dataset.idx) + 1);
+        renderCrumbs();
+        renderFolderLevel();
+      }
     })
   );
 }
@@ -327,40 +397,90 @@ function renderSubpastasBrowse(gameIdx) {
       makeCard({
         title: escapeHtml(sub.caminho),
         subtitle: `${sub.formato} · campos: ${escapeHtml((sub.campos || []).join(", "))}`,
-        onClick: () => renderFilesBrowse(gameIdx, sub),
+        onClick: () => openSubpasta(gameIdx, sub),
         onCalc: () => computeSubpastaProgress(gameIdx, sub),
       })
     );
   });
 }
 
-async function renderFilesBrowse(gameIdx, sub) {
-  RT.state.cur = { gameIdx, subpasta: sub };
+async function openSubpasta(gameIdx, sub) {
+  RT.state.cur = { gameIdx, subpasta: sub, folderPath: [], rows: null };
   renderCrumbs();
   el("btnBrowseBack").hidden = false;
-  const game = RT.state.games[gameIdx];
   const box = el("browseList");
   box.innerHTML = `<p class="empty-state">Carregando arquivos (buscando em todas as subpastas)...</p>`;
   try {
+    const game = RT.state.games[gameIdx];
     const rows = await listFilesWithMatch(game, sub);
-    if (rows.length === 0) {
-      box.innerHTML = `<p class="empty-state">Nenhum arquivo .${sub.formato} encontrado em Originais/${escapeHtml(sub.caminho)}.</p>`;
-      return;
-    }
-    box.innerHTML = "";
-    rows.forEach(({ rel, hasTranslation }) => {
-      box.appendChild(
-        makeCard({
-          title: escapeHtml(rel),
-          badgeHtml: hasTranslation ? "" : `<span class="badge badge--missing">sem tradução</span>`,
-          disabled: !hasTranslation,
-          onClick: hasTranslation ? () => openReview(gameIdx, sub, rel) : null,
-        })
-      );
-    });
+    RT.state.cur.rows = rows;
+    renderFolderLevel();
   } catch (e) {
     box.innerHTML = `<p class="empty-state">Erro ao listar arquivos: ${escapeHtml(friendlyError(e))}</p>`;
   }
+}
+
+/** Mostra o conteúdo do "nível de pasta" atual (RT.state.cur.folderPath),
+ *  agrupando os itens em pastas e arquivos como um explorador normal —
+ *  tudo calculado em cima da lista já buscada (sem chamadas extras à API). */
+function renderFolderLevel() {
+  const c = RT.state.cur;
+  const prefix = c.folderPath.length ? c.folderPath.join("/") + "/" : "";
+  const box = el("browseList");
+  box.innerHTML = "";
+
+  const folders = new Map(); // nome -> { total, traduzidos }
+  const files = [];
+
+  c.rows.forEach((r) => {
+    if (prefix && !r.rel.startsWith(prefix)) return;
+    const rest = r.rel.slice(prefix.length);
+    if (!rest) return;
+    const slash = rest.indexOf("/");
+    if (slash === -1) {
+      files.push({ ...r, name: rest });
+    } else {
+      const folderName = rest.slice(0, slash);
+      const info = folders.get(folderName) || { total: 0, traduzidos: 0 };
+      info.total++;
+      if (r.hasTranslation) info.traduzidos++;
+      folders.set(folderName, info);
+    }
+  });
+
+  if (folders.size === 0 && files.length === 0) {
+    box.innerHTML = `<p class="empty-state">Nenhum arquivo .${c.subpasta.formato} encontrado aqui.</p>`;
+    return;
+  }
+
+  Array.from(folders.entries())
+    .sort((a, b) => a[0].localeCompare(b[0]))
+    .forEach(([name, info]) => {
+      box.appendChild(
+        makeCard({
+          title: "📁 " + escapeHtml(name),
+          subtitle: `${info.total} arquivo(s) · ${info.traduzidos} traduzido(s)`,
+          onClick: () => {
+            c.folderPath.push(name);
+            renderCrumbs();
+            renderFolderLevel();
+          },
+        })
+      );
+    });
+
+  files
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .forEach((f) => {
+      box.appendChild(
+        makeCard({
+          title: escapeHtml(f.name),
+          badgeHtml: f.hasTranslation ? "" : `<span class="badge badge--missing">sem tradução</span>`,
+          disabled: !f.hasTranslation,
+          onClick: f.hasTranslation ? () => openReview(c.gameIdx, c.subpasta, f.rel) : null,
+        })
+      );
+    });
 }
 
 /** Varre Originais/<sub> e Traduzidas/<sub> recursivamente (todas as subpastas
