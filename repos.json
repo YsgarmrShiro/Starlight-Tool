@@ -8,7 +8,9 @@
       {
         "caminho": "Pack01/event/event_en",
         "formato": "json",
-        "campos": []
+        "campos": [
+          "msg_string"
+        ]
       }
     ]
   }
