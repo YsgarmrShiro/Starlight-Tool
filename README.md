@@ -101,6 +101,18 @@ arquivo compartilhado (`presenca.json`) e avisa se outra pessoa já estiver
 revisando o mesmo arquivo. Essa marca expira sozinha depois de 20 minutos
 (pra cobrir o caso de alguém fechar a aba sem clicar em "voltar").
 
+## 8. Rascunho automático (proteção contra refresh)
+
+Enquanto você edita um arquivo, a ferramenta salva automaticamente um
+rascunho no `localStorage` do seu navegador (fica só na sua máquina, não
+sai daí). Se a página recarregar ou fechar sem querer antes de você
+clicar em "Salvar no GitHub", ao reabrir o mesmo arquivo a ferramenta
+recupera esse rascunho sozinha e avisa quantos itens foram restaurados.
+
+O rascunho é apagado automaticamente quando você salva com sucesso, ou
+quando você escolhe "Sair mesmo assim" ao tentar voltar com alterações
+pendentes (nesse caso a intenção já é descartar).
+
 ## Limitações conhecidas desta primeira versão (pra ajustar depois)
 
 - O progresso (%) não é calculado automaticamente ao navegar — tem um botão

@@ -254,8 +254,9 @@ function showBrowse() {
 
 el("btnBackToBrowse").addEventListener("click", async () => {
   if (RT.state.file?.dirty) {
-    const ok = await confirmDialog("Há alterações não salvas. Sair mesmo assim?");
+    const ok = await confirmDialog("Há alterações não salvas. Sair mesmo assim? (o rascunho local será descartado)");
     if (!ok) return;
+    clearDraft(RT.state.file);
   }
   await releasePresence();
   backToFileListing();
@@ -619,6 +620,56 @@ async function releasePresence() {
 }
 
 /* =========================================================
+   RASCUNHO AUTOMÁTICO — evita perder edições se a página
+   recarregar sem querer. Salva no localStorage do navegador
+   (não sai da sua máquina), com um pequeno atraso a cada
+   edição pra não gravar a cada letra digitada.
+   ========================================================= */
+const DRAFT_PREFIX = "rt-draft-v1:";
+
+function draftKeyFor(f) {
+  return `${DRAFT_PREFIX}${f.game.owner}/${f.game.repo}/${f.game.branch}/${f.sub.caminho}/${f.rel}`;
+}
+
+function saveDraftNow() {
+  const f = RT.state.file;
+  if (!f) return;
+  const changed = {};
+  f.entries.forEach((e) => {
+    if (e.translation !== e.loadedTranslation || e.status !== e.loadedStatus || e.comment !== e.loadedComment) {
+      changed[e.id] = { translation: e.translation, status: e.status, comment: e.comment };
+    }
+  });
+  if (Object.keys(changed).length === 0) {
+    localStorage.removeItem(draftKeyFor(f));
+    return;
+  }
+  localStorage.setItem(
+    draftKeyFor(f),
+    JSON.stringify({ savedAt: new Date().toISOString(), usuario: RT.state.username, changed })
+  );
+}
+
+let draftTimer;
+function scheduleDraftSave() {
+  clearTimeout(draftTimer);
+  draftTimer = setTimeout(saveDraftNow, 400);
+}
+
+function loadDraft(f) {
+  try {
+    const raw = localStorage.getItem(draftKeyFor(f));
+    return raw ? JSON.parse(raw) : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+function clearDraft(f) {
+  localStorage.removeItem(draftKeyFor(f));
+}
+
+/* =========================================================
    REVISÃO — abrir arquivo, renderizar, salvar
    ========================================================= */
 async function openReview(gameIdx, sub, rel) {
@@ -686,7 +737,27 @@ async function openReview(gameIdx, sub, rel) {
       dirty: false,
     };
 
+    const draft = loadDraft(RT.state.file);
+    if (draft && Object.keys(draft.changed).length > 0) {
+      let restored = 0;
+      entries.forEach((e) => {
+        const d = draft.changed[e.id];
+        if (d) {
+          e.translation = d.translation;
+          e.status = d.status;
+          e.comment = d.comment;
+          restored++;
+        }
+      });
+      if (restored > 0) {
+        RT.state.file.dirty = true;
+        toast(`Recuperado um rascunho não salvo de ${new Date(draft.savedAt).toLocaleString("pt-BR")} (${restored} item(ns)).`);
+      }
+    }
+
     renderEntries();
+    el("btnSave").disabled = !RT.state.file.dirty;
+    el("dirtyNote").textContent = RT.state.file.dirty ? "há alterações não salvas (rascunho local)" : "";
   } catch (e) {
     el("entries").innerHTML = `<p class="empty-state">Erro ao carregar: ${escapeHtml(friendlyError(e))}</p>`;
   }
@@ -767,7 +838,8 @@ function renderEntryCard(e) {
 function markDirty() {
   RT.state.file.dirty = true;
   el("btnSave").disabled = false;
-  el("dirtyNote").textContent = "há alterações não salvas";
+  el("dirtyNote").textContent = "há alterações não salvas (rascunho local)";
+  scheduleDraftSave();
 }
 
 function updateProgress() {
@@ -881,6 +953,7 @@ async function saveReview() {
     }
     f.dirty = conflicts.length > 0;
     el("dirtyNote").textContent = f.dirty ? "alguns itens em conflito — veja o aviso acima" : "";
+    saveDraftNow(); // limpa o rascunho (ou mantém só o que ainda ficou pendente por conflito)
   } catch (e) {
     toast(friendlyError(e), "error");
     f.dirty = true;
