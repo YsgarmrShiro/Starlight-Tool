@@ -11,6 +11,13 @@
         "campos": [
           "msg_string"
         ]
+      },
+      {
+        "caminho": "Pack02",
+        "formato": "xml",
+        "campos": [
+          "Text="
+        ]
       }
     ]
   }
