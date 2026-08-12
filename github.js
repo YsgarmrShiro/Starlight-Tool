@@ -70,11 +70,20 @@ RT.github = (() => {
     return { files, truncated: !!tree.truncated };
   }
 
-  /** retorna { text, sha } ou null se o arquivo não existir */
+  /** retorna { text, sha } ou null se o arquivo não existir.
+   *  Arquivos maiores que 1MB não vêm com conteúdo pela Contents API
+   *  (só os metadados) — nesse caso busca o conteúdo pela Blobs API,
+   *  que suporta arquivos bem maiores. */
   async function getFile(owner, repo, path, branch) {
     try {
       const data = await req(`/repos/${owner}/${repo}/contents/${path}?ref=${encodeURIComponent(branch)}`);
-      return { text: b64decode(data.content), sha: data.sha };
+      let content = data.content;
+      if (!content && data.sha) {
+        const blob = await req(`/repos/${owner}/${repo}/git/blobs/${data.sha}`);
+        content = blob.content;
+      }
+      if (!content) throw new Error(`Não foi possível ler o conteúdo de "${path}" (arquivo vazio ou grande demais).`);
+      return { text: b64decode(content), sha: data.sha };
     } catch (e) {
       if (e.status === 404) return null;
       throw e;
