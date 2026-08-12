@@ -2,55 +2,63 @@
    Extração de texto revisável de arquivos .json e .xml.
 
    A ideia: original e traduzido têm a MESMA estrutura, só o
-   texto muda. Então a gente varre os dois usando o mesmo
-   "caminho" e casa um com o outro. Só extraímos valores cujo
-   nome de campo/tag está na lista configurada pra aquela
-   subpasta (ex: "text", "msg_string", "Text").
+   texto muda. Só extraímos valores cujo nome de campo/tag está
+   na lista configurada pra aquela subpasta (ex: "text",
+   "msg_string", "Text").
    ========================================================= */
 window.RT = window.RT || {};
 
 RT.parse = (() => {
-  /* ---------------- JSON ---------------- */
-  function walkJSON(node, fields, path = [], out = []) {
-    if (node === null || typeof node !== "object") return out;
-    if (Array.isArray(node)) {
-      node.forEach((item, i) => walkJSON(item, fields, [...path, i], out));
-    } else {
-      for (const [k, v] of Object.entries(node)) {
-        if (typeof v === "string" && fields.has(k)) {
-          out.push({ id: [...path, k].join("."), path: [...path, k], value: v });
-        } else if (v !== null && typeof v === "object") {
-          walkJSON(v, fields, [...path, k], out);
-        }
-      }
-    }
-    return out;
+  /* ---------------- JSON ----------------
+     Arquivos desse tipo (saídos de ferramentas como o KuroTools)
+     costumam ter números em hexadecimal (0x2, 0xffffffff) e outras
+     coisas que não são JSON estrito — JSON.parse rejeita isso.
+     Em vez de parsear o arquivo inteiro, a gente LOCALIZA no texto
+     cru só os pares "campo": "valor" dos campos configurados, e
+     troca só o conteúdo entre aspas. O resto do arquivo (incluindo
+     os hexadecimais) nunca é tocado nem reformatado. */
+  function escapeRegExp(s) {
+    return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   }
 
-  function getAtPath(root, path) {
-    let n = root;
-    for (const p of path) n = n?.[p];
-    return n;
-  }
-  function setAtPath(root, path, value) {
-    let n = root;
-    for (let i = 0; i < path.length - 1; i++) n = n[path[i]];
-    n[path[path.length - 1]] = value;
+  function scanJSONFields(text, fields) {
+    const entries = [];
+    fields.forEach((key) => {
+      const re = new RegExp(`"${escapeRegExp(key)}"\\s*:\\s*("(?:[^"\\\\]|\\\\.)*")`, "g");
+      let m;
+      let i = 0;
+      while ((m = re.exec(text)) !== null) {
+        const quoted = m[1];
+        const start = m.index + m[0].length - quoted.length;
+        const end = start + quoted.length;
+        let value;
+        try {
+          value = JSON.parse(quoted);
+        } catch (_) {
+          value = quoted.slice(1, -1);
+        }
+        entries.push({ id: `${key}#${i}`, value, start, end });
+        i++;
+      }
+    });
+    // ordena pela posição no arquivo, só por conveniência de leitura
+    entries.sort((a, b) => a.start - b.start);
+    return entries;
   }
 
   function extractJSON(text, fields) {
-    const data = JSON.parse(text);
-    const entries = walkJSON(data, fields);
-    return { data, entries };
+    return { data: text, entries: scanJSONFields(text, fields) };
   }
 
-  function applyJSON(data, edits) {
-    // edits: Map(id -> novoTexto)
-    edits.forEach((value, id) => {
-      const path = id.split(".").map((p) => (/^\d+$/.test(p) ? Number(p) : p));
-      setAtPath(data, path, value);
+  function applyJSON(text, edits, fieldsArr) {
+    const entries = scanJSONFields(text, new Set(fieldsArr));
+    const targets = entries.filter((e) => edits.has(e.id)).sort((a, b) => b.start - a.start);
+    let result = text;
+    targets.forEach((e) => {
+      const newQuoted = JSON.stringify(edits.get(e.id));
+      result = result.slice(0, e.start) + newQuoted + result.slice(e.end);
     });
-    return JSON.stringify(data, null, 2);
+    return result;
   }
 
   /* ---------------- XML ---------------- */
@@ -112,11 +120,12 @@ RT.parse = (() => {
     throw new Error("Formato não suportado: " + format);
   }
 
-  function apply(format, data, edits) {
-    if (format === "json") return applyJSON(data, edits);
+  function apply(format, data, edits, fieldsArr) {
+    if (format === "json") return applyJSON(data, edits, fieldsArr);
     if (format === "xml") return applyXML(data, edits);
     throw new Error("Formato não suportado: " + format);
   }
 
   return { extract, apply };
 })();
+

@@ -721,7 +721,7 @@ async function saveReview() {
     });
 
     const newTranslatedText =
-      textEdits.size > 0 ? RT.parse.apply(f.sub.formato, latestExtract.data, textEdits) : latestTranslated.text;
+      textEdits.size > 0 ? RT.parse.apply(f.sub.formato, latestExtract.data, textEdits, f.sub.campos) : latestTranslated.text;
 
     if (textEdits.size > 0) {
       const res = await gh().putFile(
