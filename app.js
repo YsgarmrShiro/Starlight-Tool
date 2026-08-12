@@ -253,13 +253,18 @@ function showBrowse() {
 }
 
 el("btnBackToBrowse").addEventListener("click", async () => {
-  if (RT.state.file?.dirty) {
-    const ok = await confirmDialog("Há alterações não salvas. Sair mesmo assim? (o rascunho local será descartado)");
-    if (!ok) return;
-    clearDraft(RT.state.file);
+  try {
+    if (RT.state.file?.dirty) {
+      const ok = await confirmDialog("Há alterações não salvas. Sair mesmo assim? (o rascunho local será descartado)");
+      if (!ok) return;
+      clearDraft(RT.state.file);
+    }
+    clearTimeout(draftTimer);
+    await releasePresence();
+    backToFileListing();
+  } catch (e) {
+    toast("Erro ao voltar: " + friendlyError(e), "error");
   }
-  await releasePresence();
-  backToFileListing();
 });
 
 function backToFileListing() {

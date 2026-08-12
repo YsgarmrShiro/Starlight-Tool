@@ -56,7 +56,7 @@ body{
   opacity:.6;
 }
 
-body > *:not(.stars){ position:relative; z-index:1; }
+body > *:not(.stars):not(.modal-overlay):not(.toast){ position:relative; z-index:1; }
 
 button, input, select, textarea{ font-family:inherit; }
 h1,h2,h3{ font-family:var(--display); }
