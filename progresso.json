@@ -11,11 +11,11 @@
       },
       "Pack01/event/event_en/mm00/event_message_mm00_012.json": {
         "total": 2,
-        "aprovados": 1,
+        "aprovados": 2,
         "porUsuario": {
-          "YsgarmrShiro": 1
+          "YsgarmrShiro": 2
         },
-        "atualizadoEm": "2026-08-12T22:48:50.151Z"
+        "atualizadoEm": "2026-08-12T22:53:00.327Z"
       }
     }
   }
