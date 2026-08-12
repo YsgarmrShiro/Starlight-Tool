@@ -9,7 +9,7 @@ RT.state = {
   games: [],
   gamesSha: null,
   progressCache: {},   // chave "gameIdx/subpasta" -> {approved,total}
-  cur: null,           // { gameIdx, subpasta, arquivo }
+  cur: null,           // { gameIdx, subpasta }
   file: null,          // dados do arquivo aberto na revisão
 };
 
@@ -31,6 +31,13 @@ function friendlyError(e) {
 }
 
 /* =========================================================
+   TELAS
+   ========================================================= */
+function hideAllScreens() {
+  ["screenLogin", "screenConfig", "screenBrowse", "screenReview"].forEach((id) => (el(id).hidden = true));
+}
+
+/* =========================================================
    LOGIN
    ========================================================= */
 const STORAGE_KEY = "rt-token-v1";
@@ -49,9 +56,7 @@ async function login(token) {
 
   el("connStatus").innerHTML = `<span class="dot dot--on"></span><span>${user.login} · ${RT.state.role}</span>`;
   el("btnConfigNav").hidden = RT.state.role !== "admin";
-  el("topbarSub").textContent = "confronto de texto original × tradução";
 
-  el("screenLogin").hidden = true;
   showBrowse();
 }
 
@@ -62,12 +67,17 @@ el("btnLogin").addEventListener("click", async () => {
     el("loginError").textContent = "Cole um token válido.";
     return;
   }
-  if (el("loginRemember").checked) localStorage.setItem(STORAGE_KEY, token);
-  else localStorage.removeItem(STORAGE_KEY);
+  el("btnLogin").disabled = true;
+  el("btnLogin").textContent = "Entrando...";
   try {
+    if (el("loginRemember").checked) localStorage.setItem(STORAGE_KEY, token);
+    else localStorage.removeItem(STORAGE_KEY);
     await login(token);
   } catch (e) {
     el("loginError").textContent = friendlyError(e);
+  } finally {
+    el("btnLogin").disabled = false;
+    el("btnLogin").textContent = "Entrar";
   }
 });
 
@@ -81,16 +91,10 @@ el("btnLogin").addEventListener("click", async () => {
 })();
 
 /* =========================================================
-   TELAS (mostrar uma, esconder as outras)
-   ========================================================= */
-function hideAllScreens() {
-  ["screenLogin", "screenConfig", "screenBrowse", "screenReview"].forEach((id) => (el(id).hidden = true));
-}
-
-/* =========================================================
    CONFIGURAÇÕES (admin) — cadastro de jogos
    ========================================================= */
 el("btnConfigNav").addEventListener("click", showConfig);
+el("btnConfigBack").addEventListener("click", showBrowse);
 
 function showConfig() {
   hideAllScreens();
@@ -101,6 +105,9 @@ function showConfig() {
 function renderGamesList() {
   const box = el("gamesList");
   box.innerHTML = "";
+  if (RT.state.games.length === 0) {
+    box.innerHTML = `<p class="empty-state">Nenhum jogo cadastrado ainda.</p>`;
+  }
   RT.state.games.forEach((game, i) => {
     const card = document.createElement("div");
     card.className = "game-card";
@@ -161,7 +168,7 @@ function openGameForm(index) {
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
     const subpastas = Array.from(subList.querySelectorAll(".subpasta-row")).map((row) => ({
-      caminho: row.querySelector(".sp-caminho").value.trim(),
+      caminho: row.querySelector(".sp-caminho").value.trim().replace(/^\/+|\/+$/g, ""),
       formato: row.querySelector(".sp-formato").value,
       campos: row
         .querySelector(".sp-campos")
@@ -193,7 +200,6 @@ function openGameForm(index) {
 }
 
 async function saveGames() {
-  // busca a versão mais recente do repos.json antes de sobrescrever
   const latest = await gh().getFile(TOOL_REPO.owner, TOOL_REPO.repo, "repos.json", TOOL_REPO.branch);
   const sha = latest ? latest.sha : undefined;
   await gh().putFile(
@@ -217,13 +223,21 @@ function showBrowse() {
   el("screenBrowse").hidden = false;
   RT.state.cur = null;
   renderCrumbs();
+  el("btnBrowseBack").hidden = true;
   renderGamesBrowse();
 }
 
 el("btnBackToBrowse").addEventListener("click", async () => {
   if (RT.state.file?.dirty && !confirm("Há alterações não salvas. Sair mesmo assim?")) return;
   await releasePresence();
-  showBrowse();
+  if (RT.state.cur) renderSubpastasBrowse(RT.state.cur.gameIdx);
+  else showBrowse();
+});
+
+el("btnBrowseBack").addEventListener("click", () => {
+  const c = RT.state.cur;
+  if (c && c.subpasta) renderSubpastasBrowse(c.gameIdx);
+  else showBrowse();
 });
 
 function renderCrumbs() {
@@ -243,97 +257,140 @@ function renderCrumbs() {
   );
 }
 
+function makeCard({ title, subtitle, badgeHtml = "", progressHtml = "", disabled = false, onClick, onCalc }) {
+  const card = document.createElement("div");
+  card.className = "browse-card" + (disabled ? " browse-card--disabled" : "");
+  card.innerHTML = `
+    <div class="browse-card__main">
+      <strong>${title}</strong>
+      ${subtitle ? `<span class="browse-card__sub">${subtitle}</span>` : ""}
+    </div>
+    <div class="browse-card__progress">${badgeHtml}${progressHtml}</div>
+    ${disabled ? "" : `<span class="browse-card__arrow">›</span>`}
+  `;
+  if (!disabled && onClick) {
+    card.addEventListener("click", (ev) => {
+      if (ev.target.closest(".gp-calc")) return;
+      onClick();
+    });
+  }
+  if (onCalc) {
+    const calcBtn = document.createElement("button");
+    calcBtn.className = "btn btn--ghost btn--small gp-calc";
+    calcBtn.textContent = "calcular progresso";
+    calcBtn.addEventListener("click", async (ev) => {
+      ev.stopPropagation();
+      const holder = card.querySelector(".browse-card__progress");
+      holder.innerHTML = `<span class="calc-loading">calculando...</span>`;
+      const total = await onCalc();
+      holder.innerHTML = progressBarHtml(total);
+    });
+    card.querySelector(".browse-card__progress").appendChild(calcBtn);
+  }
+  return card;
+}
+
 function renderGamesBrowse() {
   const box = el("browseList");
+  box.innerHTML = "";
   if (RT.state.games.length === 0) {
     box.innerHTML = `<p class="empty-state">Nenhum jogo cadastrado ainda.${
       RT.state.role === "admin" ? ' Vá em "Configurações" pra adicionar um.' : ""
     }</p>`;
     return;
   }
-  box.innerHTML = "";
   RT.state.games.forEach((game, i) => {
-    const card = document.createElement("div");
-    card.className = "browse-card";
-    card.innerHTML = `
-      <div class="browse-card__main">
-        <strong>${escapeHtml(game.nome)}</strong>
-        <span class="browse-card__sub">${(game.subpastas || []).length} subpasta(s)</span>
-      </div>
-      <div class="browse-card__progress" data-key="${i}">
-        <button class="btn btn--ghost btn--small gp-calc">calcular progresso</button>
-      </div>
-    `;
-    card.querySelector(".browse-card__main").addEventListener("click", () => renderSubpastasBrowse(i));
-    card.querySelector(".gp-calc").addEventListener("click", async (ev) => {
-      ev.stopPropagation();
-      const holder = card.querySelector(".browse-card__progress");
-      holder.innerHTML = `<span class="calc-loading">calculando...</span>`;
-      const total = await computeGameProgress(i);
-      holder.innerHTML = progressBarHtml(total);
-    });
-    box.appendChild(card);
+    box.appendChild(
+      makeCard({
+        title: escapeHtml(game.nome),
+        subtitle: `${(game.subpastas || []).length} subpasta(s)`,
+        onClick: () => renderSubpastasBrowse(i),
+        onCalc: () => computeGameProgress(i),
+      })
+    );
   });
 }
 
 function renderSubpastasBrowse(gameIdx) {
   RT.state.cur = { gameIdx, subpasta: null };
   renderCrumbs();
+  el("btnBrowseBack").hidden = false;
   const game = RT.state.games[gameIdx];
   const box = el("browseList");
+  box.innerHTML = "";
   if (!game.subpastas || game.subpastas.length === 0) {
     box.innerHTML = `<p class="empty-state">Esse jogo não tem subpastas cadastradas.</p>`;
     return;
   }
-  box.innerHTML = "";
   game.subpastas.forEach((sub) => {
-    const card = document.createElement("div");
-    card.className = "browse-card";
-    card.innerHTML = `
-      <div class="browse-card__main">
-        <strong>${escapeHtml(sub.caminho)}</strong>
-        <span class="browse-card__sub">${sub.formato} · campos: ${escapeHtml((sub.campos || []).join(", "))}</span>
-      </div>
-      <div class="browse-card__progress">
-        <button class="btn btn--ghost btn--small gp-calc">calcular progresso</button>
-      </div>
-    `;
-    card.querySelector(".browse-card__main").addEventListener("click", () => renderFilesBrowse(gameIdx, sub));
-    card.querySelector(".gp-calc").addEventListener("click", async (ev) => {
-      ev.stopPropagation();
-      const holder = card.querySelector(".browse-card__progress");
-      holder.innerHTML = `<span class="calc-loading">calculando...</span>`;
-      const total = await computeSubpastaProgress(gameIdx, sub);
-      holder.innerHTML = progressBarHtml(total);
-    });
-    box.appendChild(card);
+    box.appendChild(
+      makeCard({
+        title: escapeHtml(sub.caminho),
+        subtitle: `${sub.formato} · campos: ${escapeHtml((sub.campos || []).join(", "))}`,
+        onClick: () => renderFilesBrowse(gameIdx, sub),
+        onCalc: () => computeSubpastaProgress(gameIdx, sub),
+      })
+    );
   });
 }
 
 async function renderFilesBrowse(gameIdx, sub) {
   RT.state.cur = { gameIdx, subpasta: sub };
   renderCrumbs();
+  el("btnBrowseBack").hidden = false;
   const game = RT.state.games[gameIdx];
   const box = el("browseList");
-  box.innerHTML = `<p class="empty-state">Carregando arquivos...</p>`;
+  box.innerHTML = `<p class="empty-state">Carregando arquivos (buscando em todas as subpastas)...</p>`;
   try {
-    const items = await gh().listDir(game.owner, game.repo, `Traduzidas/${sub.caminho}`, game.branch);
-    const files = items.filter((f) => f.type === "file" && f.name.toLowerCase().endsWith("." + sub.formato));
-    if (files.length === 0) {
-      box.innerHTML = `<p class="empty-state">Nenhum arquivo .${sub.formato} encontrado em Traduzidas/${escapeHtml(sub.caminho)}.</p>`;
+    const rows = await listFilesWithMatch(game, sub);
+    if (rows.length === 0) {
+      box.innerHTML = `<p class="empty-state">Nenhum arquivo .${sub.formato} encontrado em Originais/${escapeHtml(sub.caminho)}.</p>`;
       return;
     }
     box.innerHTML = "";
-    files.forEach((f) => {
-      const card = document.createElement("div");
-      card.className = "browse-card";
-      card.innerHTML = `<div class="browse-card__main"><strong>${escapeHtml(f.name)}</strong></div>`;
-      card.addEventListener("click", () => openReview(gameIdx, sub, f.name));
-      box.appendChild(card);
+    rows.forEach(({ rel, hasTranslation }) => {
+      box.appendChild(
+        makeCard({
+          title: escapeHtml(rel),
+          badgeHtml: hasTranslation ? "" : `<span class="badge badge--missing">sem tradução</span>`,
+          disabled: !hasTranslation,
+          onClick: hasTranslation ? () => openReview(gameIdx, sub, rel) : null,
+        })
+      );
     });
   } catch (e) {
     box.innerHTML = `<p class="empty-state">Erro ao listar arquivos: ${escapeHtml(friendlyError(e))}</p>`;
   }
+}
+
+/** Varre Originais/<sub> e Traduzidas/<sub> recursivamente (todas as subpastas
+ *  dentro delas) e casa cada arquivo original com seu equivalente traduzido
+ *  pelo caminho relativo. */
+async function listFilesWithMatch(game, sub) {
+  const origPrefix = `Originais/${sub.caminho}/`;
+  const transPrefix = `Traduzidas/${sub.caminho}/`;
+  const ext = "." + sub.formato;
+
+  const [origResult, transResult] = await Promise.all([
+    gh().listRecursive(game.owner, game.repo, game.branch, origPrefix),
+    gh().listRecursive(game.owner, game.repo, game.branch, transPrefix),
+  ]);
+
+  const transSet = new Set(
+    transResult.files
+      .filter((f) => f.path.toLowerCase().endsWith(ext))
+      .map((f) => f.path.slice(transPrefix.length))
+  );
+
+  const rows = origResult.files
+    .filter((f) => f.path.toLowerCase().endsWith(ext))
+    .map((f) => {
+      const rel = f.path.slice(origPrefix.length);
+      return { rel, hasTranslation: transSet.has(rel) };
+    })
+    .sort((a, b) => a.rel.localeCompare(b.rel));
+
+  return rows;
 }
 
 function progressBarHtml({ approved, total }) {
@@ -344,14 +401,14 @@ function progressBarHtml({ approved, total }) {
 /* =========================================================
    PROGRESSO (calculado sob demanda, cacheado na sessão)
    ========================================================= */
-async function computeFileProgress(game, sub, arquivo) {
-  const translated = await gh().getFile(game.owner, game.repo, `Traduzidas/${sub.caminho}/${arquivo}`, game.branch);
+async function computeFileProgress(game, sub, rel) {
+  const translated = await gh().getFile(game.owner, game.repo, `Traduzidas/${sub.caminho}/${rel}`, game.branch);
   if (!translated) return { approved: 0, total: 0 };
   const { entries } = RT.parse.extract(sub.formato, translated.text, sub.campos);
   const metaFile = await gh().getFile(
     game.owner,
     game.repo,
-    `Traduzidas/${sub.caminho}/.revisao/${arquivo}.json`,
+    `Traduzidas/${sub.caminho}/.revisao/${rel}.json`,
     game.branch
   );
   const meta = metaFile ? JSON.parse(metaFile.text) : {};
@@ -361,12 +418,11 @@ async function computeFileProgress(game, sub, arquivo) {
 
 async function computeSubpastaProgress(gameIdx, sub) {
   const game = RT.state.games[gameIdx];
-  const items = await gh().listDir(game.owner, game.repo, `Traduzidas/${sub.caminho}`, game.branch);
-  const files = items.filter((f) => f.type === "file" && f.name.toLowerCase().endsWith("." + sub.formato));
+  const rows = (await listFilesWithMatch(game, sub)).filter((r) => r.hasTranslation);
   let approved = 0,
     total = 0;
-  for (const f of files) {
-    const p = await computeFileProgress(game, sub, f.name);
+  for (const r of rows) {
+    const p = await computeFileProgress(game, sub, r.rel);
     approved += p.approved;
     total += p.total;
   }
@@ -412,9 +468,9 @@ async function writePresence(list, sha) {
   );
 }
 
-function filePathFor(gameIdx, sub, arquivo) {
+function filePathFor(gameIdx, sub, rel) {
   const game = RT.state.games[gameIdx];
-  return `${game.nome}/${sub.caminho}/${arquivo}`;
+  return `${game.nome}/${sub.caminho}/${rel}`;
 }
 
 async function registerPresence(pathLabel) {
@@ -445,13 +501,13 @@ async function releasePresence() {
 /* =========================================================
    REVISÃO — abrir arquivo, renderizar, salvar
    ========================================================= */
-async function openReview(gameIdx, sub, arquivo) {
+async function openReview(gameIdx, sub, rel) {
   hideAllScreens();
   el("screenReview").hidden = false;
   el("entries").innerHTML = `<p class="empty-state">Carregando...</p>`;
 
   const game = RT.state.games[gameIdx];
-  const pathLabel = filePathFor(gameIdx, sub, arquivo);
+  const pathLabel = filePathFor(gameIdx, sub, rel);
 
   const occupiedBy = await registerPresence(pathLabel);
   const banner = el("presenceBanner");
@@ -467,9 +523,9 @@ async function openReview(gameIdx, sub, arquivo) {
 
   try {
     const [original, translated, metaFile] = await Promise.all([
-      gh().getFile(game.owner, game.repo, `Originais/${sub.caminho}/${arquivo}`, game.branch),
-      gh().getFile(game.owner, game.repo, `Traduzidas/${sub.caminho}/${arquivo}`, game.branch),
-      gh().getFile(game.owner, game.repo, `Traduzidas/${sub.caminho}/.revisao/${arquivo}.json`, game.branch),
+      gh().getFile(game.owner, game.repo, `Originais/${sub.caminho}/${rel}`, game.branch),
+      gh().getFile(game.owner, game.repo, `Traduzidas/${sub.caminho}/${rel}`, game.branch),
+      gh().getFile(game.owner, game.repo, `Traduzidas/${sub.caminho}/.revisao/${rel}.json`, game.branch),
     ]);
 
     if (!original || !translated) throw new Error("Arquivo original ou traduzido não encontrado.");
@@ -498,7 +554,7 @@ async function openReview(gameIdx, sub, arquivo) {
     RT.state.file = {
       gameIdx,
       sub,
-      arquivo,
+      rel,
       pathLabel,
       game,
       translatedData: transExtract.data,
@@ -621,13 +677,12 @@ async function saveReview() {
   el("btnSave").textContent = "Salvando...";
 
   try {
-    // 1. busca a versão mais recente de tradução + metadados
     const [latestTranslated, latestMetaFile] = await Promise.all([
-      gh().getFile(f.game.owner, f.game.repo, `Traduzidas/${f.sub.caminho}/${f.arquivo}`, f.game.branch),
+      gh().getFile(f.game.owner, f.game.repo, `Traduzidas/${f.sub.caminho}/${f.rel}`, f.game.branch),
       gh().getFile(
         f.game.owner,
         f.game.repo,
-        `Traduzidas/${f.sub.caminho}/.revisao/${f.arquivo}.json`,
+        `Traduzidas/${f.sub.caminho}/.revisao/${f.rel}.json`,
         f.game.branch
       ),
     ]);
@@ -665,7 +720,6 @@ async function saveReview() {
       }
     });
 
-    // 2. aplica as edições de texto em cima dos dados MAIS RECENTES (não nos que tínhamos carregado)
     const newTranslatedText =
       textEdits.size > 0 ? RT.parse.apply(f.sub.formato, latestExtract.data, textEdits) : latestTranslated.text;
 
@@ -673,7 +727,7 @@ async function saveReview() {
       const res = await gh().putFile(
         f.game.owner,
         f.game.repo,
-        `Traduzidas/${f.sub.caminho}/${f.arquivo}`,
+        `Traduzidas/${f.sub.caminho}/${f.rel}`,
         newTranslatedText,
         latestTranslated.sha,
         f.game.branch,
@@ -685,14 +739,13 @@ async function saveReview() {
     await gh().putFile(
       f.game.owner,
       f.game.repo,
-      `Traduzidas/${f.sub.caminho}/.revisao/${f.arquivo}.json`,
+      `Traduzidas/${f.sub.caminho}/.revisao/${f.rel}.json`,
       JSON.stringify(newMeta, null, 2),
       latestMetaFile ? latestMetaFile.sha : undefined,
       f.game.branch,
       `Atualiza status de revisão — por ${RT.state.username}`
     );
 
-    // 3. atualiza os "loaded*" locais pra refletir o que foi salvo de fato
     f.entries.forEach((e) => {
       if (textEdits.has(e.id)) e.loadedTranslation = e.translation;
       if (newMeta[e.id] && !conflicts.some((c) => c.id === e.id)) {

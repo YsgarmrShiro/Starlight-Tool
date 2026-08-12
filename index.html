@@ -6,14 +6,16 @@
 <title>Revisor de Traduções</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@500;600;700;800&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css" />
 </head>
 <body>
 
+  <div class="stars" aria-hidden="true"></div>
+
   <header class="topbar">
     <div class="topbar__brand">
-      <span class="topbar__mark">◆</span>
+      <span class="topbar__mark">✦</span>
       <div>
         <h1>Revisor de Traduções</h1>
         <p class="topbar__sub" id="topbarSub">confronto de texto original × tradução</p>
@@ -30,6 +32,7 @@
   <!-- ===== LOGIN ===== -->
   <section class="setup" id="screenLogin">
     <div class="setup__card">
+      <span class="setup__glow" aria-hidden="true"></span>
       <h2>Entrar com o GitHub</h2>
       <p class="setup__hint">
         Use um Personal Access Token (escopo <code>repo</code>). Sua permissão no
@@ -53,6 +56,7 @@
   <!-- ===== CONFIGURAÇÕES (admin) ===== -->
   <section class="config" id="screenConfig" hidden>
     <div class="config__header">
+      <button class="btn btn--ghost btn--small" id="btnConfigBack">← voltar</button>
       <h2>Jogos cadastrados</h2>
       <button class="btn btn--primary btn--small" id="btnAddGame">+ novo jogo</button>
     </div>
@@ -90,14 +94,17 @@
 
   <!-- ===== NAVEGAÇÃO (jogo → subpasta → arquivo) ===== -->
   <main class="browse" id="screenBrowse" hidden>
-    <div class="crumbs" id="crumbs"></div>
+    <div class="browse__header">
+      <button class="btn btn--ghost btn--small" id="btnBrowseBack" hidden>← voltar</button>
+      <div class="crumbs" id="crumbs"></div>
+    </div>
     <div id="browseList" class="browse-list"></div>
   </main>
 
   <!-- ===== REVISÃO ===== -->
   <main class="app" id="screenReview" hidden>
     <aside class="sidebar">
-      <button class="btn btn--ghost btn--small" id="btnBackToBrowse">← voltar</button>
+      <button class="btn btn--ghost btn--small btn--back" id="btnBackToBrowse">← voltar</button>
 
       <div class="sidebar__block" id="presenceBanner" hidden></div>
 

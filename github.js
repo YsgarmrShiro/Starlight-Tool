@@ -62,6 +62,14 @@ RT.github = (() => {
     return Array.isArray(items) ? items : [items];
   }
 
+  /** Lista TODOS os arquivos (recursivamente) cujo caminho comece com `prefix`.
+   *  Usa a Git Trees API — uma chamada só, mesmo pra pastas com subpastas aninhadas. */
+  async function listRecursive(owner, repo, branch, prefix) {
+    const tree = await req(`/repos/${owner}/${repo}/git/trees/${encodeURIComponent(branch)}?recursive=1`);
+    const files = tree.tree.filter((t) => t.type === "blob" && t.path.startsWith(prefix));
+    return { files, truncated: !!tree.truncated };
+  }
+
   /** retorna { text, sha } ou null se o arquivo não existir */
   async function getFile(owner, repo, path, branch) {
     try {
@@ -85,5 +93,5 @@ RT.github = (() => {
     });
   }
 
-  return { req, getUser, getPermission, listDir, getFile, putFile };
+  return { req, getUser, getPermission, listDir, listRecursive, getFile, putFile };
 })();
