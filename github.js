@@ -40,7 +40,9 @@ RT.github = (() => {
   function b64decode(b64) {
     const bin = atob(b64.replace(/\n/g, ""));
     const bytes = Uint8Array.from(bin, (c) => c.charCodeAt(0));
-    return new TextDecoder().decode(bytes);
+    let text = new TextDecoder().decode(bytes);
+    if (text.charCodeAt(0) === 0xfeff) text = text.slice(1); // remove BOM, se houver
+    return text;
   }
 
   async function getUser() {
