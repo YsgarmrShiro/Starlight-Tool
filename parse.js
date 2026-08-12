@@ -94,7 +94,9 @@ RT.parse = (() => {
   }
 
   function extractXML(text, fields) {
-    const doc = new DOMParser().parseFromString(text, "application/xml");
+    const firstTag = text.indexOf("<");
+    const cleanText = firstTag > 0 ? text.slice(firstTag) : text;
+    const doc = new DOMParser().parseFromString(cleanText, "application/xml");
     const parseError = doc.querySelector("parsererror");
     if (parseError) throw new Error("XML inválido: " + parseError.textContent.slice(0, 200));
     const entries = walkXML(doc.documentElement, fields);
