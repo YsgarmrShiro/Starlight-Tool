@@ -5,5 +5,20 @@
     "repo": "Teste",
     "branch": "main",
     "subpastas": []
+  },
+  {
+    "nome": "Atelier Ryza",
+    "owner": "YsgarmrShiro",
+    "repo": "Teste",
+    "branch": "main",
+    "subpastas": [
+      {
+        "caminho": "",
+        "formato": "json",
+        "campos": [
+          "msg_string"
+        ]
+      }
+    ]
   }
 ]
