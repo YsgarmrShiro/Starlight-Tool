@@ -1,0 +1,14 @@
+{
+  "YsgarmrShiro/Teste": {
+    "arquivos": {
+      "Pack01/event/event_en/mm01/event_message_mm01_010.json": {
+        "total": 31,
+        "aprovados": 1,
+        "porUsuario": {
+          "YsgarmrShiro": 1
+        },
+        "atualizadoEm": "2026-08-12T22:43:13.147Z"
+      }
+    }
+  }
+}
