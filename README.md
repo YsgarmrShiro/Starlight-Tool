@@ -113,6 +113,22 @@ O rascunho é apagado automaticamente quando você salva com sucesso, ou
 quando você escolhe "Sair mesmo assim" ao tentar voltar com alterações
 pendentes (nesse caso a intenção já é descartar).
 
+## 9. Progresso automático e presença bloqueante
+
+Os % de **Tradução** e **Revisão** aparecem sozinhos nos cards de jogo,
+subpasta e arquivo — não precisa mais clicar em nenhum botão:
+
+- **Tradução**: calculada na hora, olhando só a árvore de arquivos do
+  repositório (rápido, sem ler o conteúdo de nada).
+- **Revisão**: vem de um cache (`progresso.json`, salvo no repositório da
+  própria ferramenta) que é atualizado automaticamente sempre que alguém
+  salva uma revisão. Isso também alimenta o painel de **% revisado por
+  pessoa**, que aparece ao entrar num jogo.
+
+Presença agora **bloqueia de verdade**: se alguém já está revisando um
+arquivo, ele aparece cinza com a etiqueta "em revisão: fulano" na lista, e
+tentar abrir mostra um aviso em vez de deixar entrar.
+
 ## Limitações conhecidas desta primeira versão (pra ajustar depois)
 
 - O progresso (%) não é calculado automaticamente ao navegar — tem um botão

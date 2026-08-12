@@ -173,11 +173,17 @@ code{ background:var(--panel-alt); padding:1px 6px; border-radius:5px; font-fami
 .progress__bar--inline{ width:64px; }
 .badge{ font-size:11px; border-radius:999px; padding:3px 10px; white-space:nowrap; }
 .badge--missing{ background:var(--danger-dim); color:var(--danger); border:1px solid var(--danger); }
+.badge--busy{ background:var(--warn-dim); color:var(--warn); border:1px solid var(--warn); }
+.badge--ok{ background:var(--approved-dim); color:var(--approved); border:1px solid var(--approved); }
+.pct-chip{ font-size:11px; background:var(--panel-alt); border:1px solid var(--border); border-radius:999px; padding:3px 10px; color:var(--text-dim); white-space:nowrap; }
+.pct-chip--user{ background:var(--panel-solid); }
+.user-breakdown{ background:var(--panel-solid); border:1px solid var(--border); border-radius:var(--radius); padding:14px 16px; margin-bottom:6px; }
+.user-breakdown__list{ display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
 
 .empty-state{ color:var(--text-faint); font-size:14px; margin-top:50px; text-align:center; }
 
 /* ===== REVIEW APP LAYOUT ===== */
-.app{ display:grid; grid-template-columns:270px 1fr; min-height:calc(100vh - 71px); }
+.app{ display:grid; grid-template-columns:270px 1fr; align-items:start; }
 .sidebar{ border-right:1px solid var(--border); background:rgba(21,24,39,0.5); padding:22px; display:flex; flex-direction:column; gap:22px; }
 .sidebar__block{ display:flex; flex-direction:column; gap:8px; }
 .sidebar__label{ font-size:11px; text-transform:uppercase; letter-spacing:.07em; color:var(--text-faint); }
@@ -201,7 +207,7 @@ code{ background:var(--panel-alt); padding:1px 6px; border-radius:5px; font-fami
 .progress__fill{ height:100%; background:var(--gradient); width:0%; transition:width .2s ease; }
 .progress__text{ font-size:11px; color:var(--text-dim); }
 
-.entries{ padding:28px; display:flex; flex-direction:column; gap:14px; overflow-y:auto; }
+.entries{ padding:28px; display:flex; flex-direction:column; gap:14px; }
 .entry{
   background:var(--panel-solid); border:1px solid var(--border); border-left:4px solid var(--text-faint);
   border-radius:var(--radius); padding:18px 20px; display:grid; grid-template-columns:1fr 1fr; gap:18px;
