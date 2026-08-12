@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Revisor de Traduções</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <header class="topbar">
+    <div class="topbar__brand">
+      <span class="topbar__mark">◆</span>
+      <div>
+        <h1>Revisor de Traduções</h1>
+        <p class="topbar__sub" id="topbarSub">confronto de texto original × tradução</p>
+      </div>
+    </div>
+    <div class="topbar__right">
+      <button class="btn btn--ghost btn--small" id="btnConfigNav" hidden>Configurações</button>
+      <div class="topbar__status" id="connStatus">
+        <span class="dot dot--off"></span><span>desconectado</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- ===== LOGIN ===== -->
+  <section class="setup" id="screenLogin">
+    <div class="setup__card">
+      <h2>Entrar com o GitHub</h2>
+      <p class="setup__hint">
+        Use um Personal Access Token (escopo <code>repo</code>). Sua permissão no
+        repositório da ferramenta define se você vê a tela de configurações.
+      </p>
+      <label class="field field--wide">
+        <span>Token de acesso</span>
+        <input type="password" id="loginToken" placeholder="ghp_...">
+      </label>
+      <label class="checkbox">
+        <input type="checkbox" id="loginRemember">
+        <span>Lembrar neste navegador</span>
+      </label>
+      <div class="setup__actions">
+        <button class="btn btn--primary" id="btnLogin">Entrar</button>
+      </div>
+      <p class="setup__error" id="loginError"></p>
+    </div>
+  </section>
+
+  <!-- ===== CONFIGURAÇÕES (admin) ===== -->
+  <section class="config" id="screenConfig" hidden>
+    <div class="config__header">
+      <h2>Jogos cadastrados</h2>
+      <button class="btn btn--primary btn--small" id="btnAddGame">+ novo jogo</button>
+    </div>
+    <div id="gamesList" class="games-list"></div>
+
+    <template id="tplGameForm">
+      <form class="game-form">
+        <div class="field-grid">
+          <label class="field"><span>Nome do jogo</span><input class="gf-nome" required></label>
+          <label class="field"><span>Owner (usuário/org)</span><input class="gf-owner" required></label>
+          <label class="field"><span>Repositório</span><input class="gf-repo" required></label>
+          <label class="field"><span>Branch</span><input class="gf-branch" value="main"></label>
+        </div>
+        <div class="subpastas-list"></div>
+        <button type="button" class="btn btn--ghost btn--small gf-add-sub">+ subpasta</button>
+        <template class="tpl-subpasta">
+          <div class="subpasta-row">
+            <input class="sp-caminho" placeholder="caminho (ex: dialogos)">
+            <select class="sp-formato">
+              <option value="json">json</option>
+              <option value="xml">xml</option>
+            </select>
+            <input class="sp-campos" placeholder="campos, separados por vírgula (ex: text, msg_string)">
+            <button type="button" class="btn btn--ghost btn--small sp-remove">remover</button>
+          </div>
+        </template>
+        <div class="game-form__actions">
+          <button type="submit" class="btn btn--primary btn--small">Salvar jogo</button>
+          <button type="button" class="btn btn--ghost btn--small gf-cancel">Cancelar</button>
+          <button type="button" class="btn btn--ghost btn--small gf-delete">Remover jogo</button>
+        </div>
+      </form>
+    </template>
+  </section>
+
+  <!-- ===== NAVEGAÇÃO (jogo → subpasta → arquivo) ===== -->
+  <main class="browse" id="screenBrowse" hidden>
+    <div class="crumbs" id="crumbs"></div>
+    <div id="browseList" class="browse-list"></div>
+  </main>
+
+  <!-- ===== REVISÃO ===== -->
+  <main class="app" id="screenReview" hidden>
+    <aside class="sidebar">
+      <button class="btn btn--ghost btn--small" id="btnBackToBrowse">← voltar</button>
+
+      <div class="sidebar__block" id="presenceBanner" hidden></div>
+
+      <div class="sidebar__block">
+        <span class="sidebar__label">Filtrar por status</span>
+        <div class="filter-group" id="filterGroup">
+          <button class="chip chip--all is-active" data-filter="all">Todos</button>
+          <button class="chip chip--pending" data-filter="pending">Pendente</button>
+          <button class="chip chip--approved" data-filter="approved">Aprovado</button>
+          <button class="chip chip--flagged" data-filter="flagged">A revisar</button>
+        </div>
+      </div>
+
+      <div class="sidebar__block">
+        <span class="sidebar__label">Buscar texto</span>
+        <input type="text" id="searchBox" placeholder="original ou tradução...">
+      </div>
+
+      <div class="sidebar__block progress" id="progressBlock">
+        <span class="sidebar__label">Progresso deste arquivo</span>
+        <div class="progress__bar"><div class="progress__fill" id="progressFill"></div></div>
+        <span class="progress__text" id="progressText">0 / 0 aprovados</span>
+      </div>
+
+      <div class="sidebar__spacer"></div>
+      <button class="btn btn--primary btn--block" id="btnSave" disabled>Salvar no GitHub</button>
+      <p class="sidebar__note" id="dirtyNote"></p>
+    </aside>
+
+    <section class="entries" id="entries"></section>
+  </main>
+
+  <div class="toast" id="toast" hidden></div>
+
+  <script src="tool.config.js"></script>
+  <script src="github.js"></script>
+  <script src="parse.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
