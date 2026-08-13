@@ -138,6 +138,19 @@ Presença agora **bloqueia de verdade**: se alguém já está revisando um
 arquivo, ele aparece cinza com a etiqueta "em revisão: fulano" na lista, e
 tentar abrir mostra um aviso em vez de deixar entrar.
 
+## 10. Filtro de acesso por jogo
+
+Ao entrar, a ferramenta verifica em qual repositório de jogo você tem
+permissão de verdade (checando direto com o GitHub) e só mostra na lista
+os jogos onde você tem acesso. Se você não tiver permissão em nenhum dos
+jogos cadastrados, aparece um aviso pedindo pra um administrador te
+adicionar como colaborador no repositório do jogo que você quer revisar.
+
+Isso vale só pra tela de navegação/revisão — quem é **admin** continua
+vendo todos os jogos na tela de Configurações, mesmo sem acesso pessoal ao
+repositório de tradução deles, já que ali o que importa é gerenciar o
+cadastro, não revisar.
+
 ## Limitações conhecidas desta primeira versão (pra ajustar depois)
 
 - O progresso (%) não é calculado automaticamente ao navegar — tem um botão

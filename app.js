@@ -82,6 +82,16 @@ async function login(token) {
   const progressFile = await gh().getFile(TOOL_REPO.owner, TOOL_REPO.repo, PROGRESS_PATH, TOOL_REPO.branch);
   RT.state.progressData = progressFile ? JSON.parse(progressFile.text) : {};
 
+  // checa em quais jogos a pessoa tem permissão de verdade (evita listar
+  // repositórios que ela nem consegue acessar)
+  RT.state.gameAccess = {};
+  await Promise.all(
+    RT.state.games.map(async (game) => {
+      const perm = await gh().getPermission(game.owner, game.repo, user.login);
+      RT.state.gameAccess[gameKey(game)] = perm;
+    })
+  );
+
   el("connStatus").innerHTML = `<span class="dot dot--on"></span><span>${user.login} · ${RT.state.role}</span>`;
   el("btnConfigNav").hidden = RT.state.role !== "admin";
 
@@ -396,7 +406,17 @@ function renderGamesBrowse() {
     }</p>`;
     return;
   }
-  RT.state.games.forEach((game, i) => {
+
+  const visibleGames = RT.state.games
+    .map((game, i) => ({ game, i }))
+    .filter(({ game }) => RT.state.gameAccess[gameKey(game)] && RT.state.gameAccess[gameKey(game)] !== "none");
+
+  if (visibleGames.length === 0) {
+    box.innerHTML = `<p class="empty-state">Você não tem permissão em nenhum dos repositórios de tradução cadastrados.<br>Peça pra um administrador te adicionar como colaborador no repositório do jogo que você quer revisar.</p>`;
+    return;
+  }
+
+  visibleGames.forEach(({ game, i }) => {
     const rev = reviewStatsForGame(game);
     const card = makeCard({
       title: escapeHtml(game.nome),
