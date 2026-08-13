@@ -18,6 +18,13 @@
         "campos": [
           "Text"
         ]
+      },
+      {
+        "caminho": "Teste",
+        "formato": "json",
+        "campos": [
+          "v"
+        ]
       }
     ]
   }
