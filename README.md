@@ -126,14 +126,13 @@ subpasta e arquivo — não precisa mais clicar em nenhum botão:
   revisado por pessoa**, que aparece ao entrar num jogo.
 
   Importante: um arquivo só entra na conta depois de ser aberto pelo menos
-  uma vez (é só assim que a ferramenta sabe quantos itens ele tem). Por
-  isso o chip de Revisão mostra "(N/M arq.)" — quantos dos arquivos
-  traduzidos já têm dado de progresso. Se isso ficar muito incompleto (uma
-  pasta com centenas de arquivos nunca abertos, por exemplo), use o botão
-  **"Escanear progresso completo"** dentro da subpasta — ele lê todos os
-  arquivos traduzidos daquela subpasta de uma vez e recalcula tudo. Pode
-  demorar em pastas muito grandes (a ferramenta avisa antes se forem mais
-  de 150 arquivos).
+  uma vez (é só assim que a ferramenta sabe quantos itens ele tem). Quem é
+  **admin** vê, ao entrar numa subpasta, quantos arquivos já têm dado no
+  cache (ex: "12/1683 arq. no cache") e o botão **"Escanear progresso
+  completo"** — que lê todos os arquivos traduzidos daquela subpasta de uma
+  vez e recalcula tudo. Pode demorar em pastas muito grandes (a ferramenta
+  avisa antes se forem mais de 150 arquivos). Esse botão e o contador só
+  aparecem pra admin — revisores não veem, pra não poluir a tela.
 
 Presença agora **bloqueia de verdade**: se alguém já está revisando um
 arquivo, ele aparece cinza com a etiqueta "em revisão: fulano" na lista, e

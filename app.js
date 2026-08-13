@@ -254,6 +254,7 @@ function showBrowse() {
   renderCrumbs();
   el("btnBrowseBack").hidden = true;
   el("btnScanProgress").hidden = true;
+  el("scanStatus").hidden = true;
   renderGamesBrowse();
 }
 
@@ -289,7 +290,7 @@ function backToFileListing() {
 
 el("btnScanProgress").addEventListener("click", async () => {
   const c = RT.state.cur;
-  if (!c || !c.subpasta || !c.rows) return;
+  if (!c || !c.subpasta || !c.rows || RT.state.role !== "admin") return;
   const game = RT.state.games[c.gameIdx];
   const translatedCount = c.rows.filter((r) => r.hasTranslation).length;
 
@@ -305,8 +306,10 @@ el("btnScanProgress").addEventListener("click", async () => {
   try {
     const result = await scanSubpastaProgress(game, c.subpasta, c.rows, (done, total) => {
       btn.textContent = `Escaneando... ${done}/${total}`;
+      el("scanStatus").textContent = `${done}/${total} arq. no cache`;
     });
     toast(`Progresso recalculado: ${result.scanned} arquivo(s) verificados.`);
+    el("scanStatus").textContent = `${result.scanned}/${translatedCount} arq. no cache`;
     renderFolderLevel();
   } catch (e) {
     toast(friendlyError(e), "error");
@@ -405,8 +408,7 @@ function renderGamesBrowse() {
     computeGameTranslationCoverage(game)
       .then(({ total, matched }) => {
         const holder = card.querySelector(".browse-card__progress");
-        const scanned = countCacheFiles(game, "");
-        holder.innerHTML = pctChip("Tradução", matched, total) + pctChip(`Revisão (${scanned}/${matched} arq.)`, rev.aprovados, rev.total);
+        holder.innerHTML = pctChip("Tradução", matched, total) + pctChip("Revisão", rev.aprovados, rev.total);
       })
       .catch(() => {
         const holder = card.querySelector(".browse-card__progress");
@@ -420,6 +422,7 @@ function renderSubpastasBrowse(gameIdx) {
   renderCrumbs();
   el("btnBrowseBack").hidden = false;
   el("btnScanProgress").hidden = true;
+  el("scanStatus").hidden = true;
   const game = RT.state.games[gameIdx];
   const box = el("browseList");
   box.innerHTML = "";
@@ -456,9 +459,8 @@ function renderSubpastasBrowse(gameIdx) {
     box.appendChild(card);
     computeSubTranslationCoverage(game, sub)
       .then(({ total, matched }) => {
-        const scanned = countCacheFiles(game, sub.caminho + "/");
         card.querySelector(".browse-card__progress").innerHTML =
-          pctChip("Tradução", matched, total) + pctChip(`Revisão (${scanned}/${matched} arq.)`, rev.aprovados, rev.total);
+          pctChip("Tradução", matched, total) + pctChip("Revisão", rev.aprovados, rev.total);
       })
       .catch(() => {
         card.querySelector(".browse-card__progress").innerHTML = pctChip("Revisão", rev.aprovados, rev.total);
@@ -477,7 +479,13 @@ async function openSubpasta(gameIdx, sub) {
     const [rows, presenceResult] = await Promise.all([listFilesWithMatch(game, sub), readPresence()]);
     RT.state.cur.rows = rows;
     RT.state.cur.presence = presenceResult.list;
-    el("btnScanProgress").hidden = false;
+    if (RT.state.role === "admin") {
+      const translatedCount = rows.filter((r) => r.hasTranslation).length;
+      const scanned = countCacheFiles(game, sub.caminho + "/");
+      el("btnScanProgress").hidden = false;
+      el("scanStatus").hidden = false;
+      el("scanStatus").textContent = `${scanned}/${translatedCount} arq. no cache`;
+    }
     renderFolderLevel();
   } catch (e) {
     box.innerHTML = `<p class="empty-state">Erro ao listar arquivos: ${escapeHtml(friendlyError(e))}</p>`;
