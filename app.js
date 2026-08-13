@@ -63,6 +63,24 @@ function confirmDialog(message) {
 /* =========================================================
    TELAS
    ========================================================= */
+el("btnHome").addEventListener("click", async () => {
+  if (!RT.auth?.token) return; // ainda na tela de login, não há pra onde "voltar"
+  try {
+    if (RT.state.file?.dirty) {
+      const ok = await confirmDialog("Há alterações não salvas. Sair mesmo assim? (o rascunho local será descartado)");
+      if (!ok) return;
+      clearDraft(RT.state.file);
+    }
+    if (RT.state.file) {
+      clearTimeout(draftTimer);
+      await releasePresence();
+    }
+    showBrowse();
+  } catch (e) {
+    toast(friendlyError(e), "error");
+  }
+});
+
 function hideAllScreens() {
   ["screenLogin", "screenConfig", "screenBrowse", "screenReview", "screenGlossary"].forEach((id) => (el(id).hidden = true));
 }
