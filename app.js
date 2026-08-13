@@ -1,5 +1,10 @@
 window.RT = window.RT || {};
 
+const STARLIGHT_FOLDER = "StarlightTool";
+function metaPath(sub, rel) {
+  return `${STARLIGHT_FOLDER}/revisao/${sub.caminho}/${rel}.json`;
+}
+
 const el = (id) => document.getElementById(id);
 const gh = () => RT.github;
 
@@ -79,16 +84,20 @@ async function login(token) {
   RT.state.games = reposFile ? JSON.parse(reposFile.text) : [];
   RT.state.gamesSha = reposFile ? reposFile.sha : null;
 
-  const progressFile = await gh().getFile(TOOL_REPO.owner, TOOL_REPO.repo, PROGRESS_PATH, TOOL_REPO.branch);
-  RT.state.progressData = progressFile ? JSON.parse(progressFile.text) : {};
-
-  // checa em quais jogos a pessoa tem permissão de verdade (evita listar
-  // repositórios que ela nem consegue acessar)
+  // checa em quais jogos a pessoa tem permissão de verdade, e já aproveita
+  // pra buscar o progresso de cada jogo (que vive no repositório dele mesmo)
   RT.state.gameAccess = {};
+  RT.state.progressData = {};
   await Promise.all(
     RT.state.games.map(async (game) => {
       const perm = await gh().getPermission(game.owner, game.repo, user.login);
       RT.state.gameAccess[gameKey(game)] = perm;
+      try {
+        const pf = await gh().getFile(game.owner, game.repo, PROGRESS_PATH, game.branch);
+        RT.state.progressData[gameKey(game)] = pf ? JSON.parse(pf.text) : { arquivos: {} };
+      } catch (e) {
+        RT.state.progressData[gameKey(game)] = { arquivos: {} };
+      }
     })
   );
 
@@ -496,7 +505,7 @@ async function openSubpasta(gameIdx, sub) {
   box.innerHTML = `<p class="empty-state">Carregando arquivos (buscando em todas as subpastas)...</p>`;
   try {
     const game = RT.state.games[gameIdx];
-    const [rows, presenceResult] = await Promise.all([listFilesWithMatch(game, sub), readPresence()]);
+    const [rows, presenceResult] = await Promise.all([listFilesWithMatch(game, sub), readPresence(game)]);
     RT.state.cur.rows = rows;
     RT.state.cur.presence = presenceResult.list;
     if (RT.state.role === "admin") {
@@ -653,11 +662,12 @@ function progressBarHtml({ approved, total }) {
      correspondente. Calculada ao vivo a partir da árvore do
      repositório (rápida — 1 chamada por jogo, sem ler conteúdo).
    - "Revisão": quantos itens estão aprovados. Vem de um cache
-     persistido (progresso.json, no repositório da ferramenta)
-     que é atualizado automaticamente toda vez que alguém salva
-     uma revisão — não precisa reprocessar tudo pra exibir.
+     persistido (StarlightTool/progresso.json, DENTRO do repositório
+     de cada jogo — não no repositório da ferramenta) que é
+     atualizado automaticamente toda vez que alguém abre ou salva
+     uma revisão.
    ========================================================= */
-const PROGRESS_PATH = "progresso.json";
+const PROGRESS_PATH = `${STARLIGHT_FOLDER}/progresso.json`;
 
 function gameKey(game) {
   return `${game.owner}/${game.repo}`;
@@ -668,21 +678,20 @@ function fileKey(sub, rel) {
 
 async function saveProgressEntry(game, sub, rel, stats) {
   try {
-    const latest = await gh().getFile(TOOL_REPO.owner, TOOL_REPO.repo, PROGRESS_PATH, TOOL_REPO.branch);
-    const data = latest ? JSON.parse(latest.text) : {};
-    const gk = gameKey(game);
-    data[gk] = data[gk] || { arquivos: {} };
-    data[gk].arquivos[fileKey(sub, rel)] = { ...stats, atualizadoEm: new Date().toISOString() };
+    const latest = await gh().getFile(game.owner, game.repo, PROGRESS_PATH, game.branch);
+    const data = latest ? JSON.parse(latest.text) : { arquivos: {} };
+    data.arquivos = data.arquivos || {};
+    data.arquivos[fileKey(sub, rel)] = { ...stats, atualizadoEm: new Date().toISOString() };
     await gh().putFile(
-      TOOL_REPO.owner,
-      TOOL_REPO.repo,
+      game.owner,
+      game.repo,
       PROGRESS_PATH,
       JSON.stringify(data, null, 2),
       latest ? latest.sha : undefined,
-      TOOL_REPO.branch,
+      game.branch,
       "Atualiza cache de progresso"
     );
-    RT.state.progressData = data; // mantém a cópia local em dia
+    RT.state.progressData[gameKey(game)] = data; // mantém a cópia local em dia
   } catch (e) {
     /* best-effort — não impede o salvamento da revisão em si */
   }
@@ -705,17 +714,16 @@ async function touchProgressEntry(game, sub, rel, stats) {
  *  ação sob demanda, não automática. */
 async function scanSubpastaProgress(game, sub, rows, onProgress) {
   const translatedRows = rows.filter((r) => r.hasTranslation);
-  const latest = await gh().getFile(TOOL_REPO.owner, TOOL_REPO.repo, PROGRESS_PATH, TOOL_REPO.branch);
-  const data = latest ? JSON.parse(latest.text) : {};
-  const gk = gameKey(game);
-  data[gk] = data[gk] || { arquivos: {} };
+  const latest = await gh().getFile(game.owner, game.repo, PROGRESS_PATH, game.branch);
+  const data = latest ? JSON.parse(latest.text) : { arquivos: {} };
+  data.arquivos = data.arquivos || {};
 
   let done = 0;
   for (const r of translatedRows) {
     try {
       const [translated, metaFile] = await Promise.all([
         gh().getFile(game.owner, game.repo, `Traduzidas/${sub.caminho}/${r.rel}`, game.branch),
-        gh().getFile(game.owner, game.repo, `Traduzidas/${sub.caminho}/.revisao/${r.rel}.json`, game.branch),
+        gh().getFile(game.owner, game.repo, metaPath(sub, r.rel), game.branch),
       ]);
       if (translated) {
         const { entries } = RT.parse.extract(sub.formato, translated.text, sub.campos);
@@ -729,7 +737,7 @@ async function scanSubpastaProgress(game, sub, rows, onProgress) {
             if (m.reviewer) porUsuario[m.reviewer] = (porUsuario[m.reviewer] || 0) + 1;
           }
         });
-        data[gk].arquivos[fileKey(sub, r.rel)] = {
+        data.arquivos[fileKey(sub, r.rel)] = {
           total: entries.length,
           aprovados,
           porUsuario,
@@ -744,15 +752,15 @@ async function scanSubpastaProgress(game, sub, rows, onProgress) {
   }
 
   await gh().putFile(
-    TOOL_REPO.owner,
-    TOOL_REPO.repo,
+    game.owner,
+    game.repo,
     PROGRESS_PATH,
     JSON.stringify(data, null, 2),
     latest ? latest.sha : undefined,
-    TOOL_REPO.branch,
+    game.branch,
     `Escaneia progresso de ${sub.caminho} — por ${RT.state.username}`
   );
-  RT.state.progressData = data;
+  RT.state.progressData[gameKey(game)] = data;
   return { scanned: done, total: translatedRows.length };
 }
 
@@ -859,46 +867,45 @@ function countCacheFiles(game, keyPrefix) {
 /* =========================================================
    PRESENÇA — quem está revisando o quê agora
    ========================================================= */
-const PRESENCE_PATH = "presenca.json";
+const PRESENCE_PATH = `${STARLIGHT_FOLDER}/presenca.json`;
 const PRESENCE_STALE_MS = 20 * 60 * 1000; // 20 minutos
 
-async function readPresence() {
-  const f = await gh().getFile(TOOL_REPO.owner, TOOL_REPO.repo, PRESENCE_PATH, TOOL_REPO.branch);
+async function readPresence(game) {
+  const f = await gh().getFile(game.owner, game.repo, PRESENCE_PATH, game.branch);
   const list = f ? JSON.parse(f.text) : [];
   const now = Date.now();
   return { list: list.filter((p) => now - new Date(p.desde).getTime() < PRESENCE_STALE_MS), sha: f?.sha };
 }
 
-async function writePresence(list, sha) {
+async function writePresence(game, list, sha) {
   await gh().putFile(
-    TOOL_REPO.owner,
-    TOOL_REPO.repo,
+    game.owner,
+    game.repo,
     PRESENCE_PATH,
     JSON.stringify(list, null, 2),
     sha,
-    TOOL_REPO.branch,
+    game.branch,
     "Atualiza presença de revisão"
   );
 }
 
 function filePathFor(gameIdx, sub, rel) {
-  const game = RT.state.games[gameIdx];
-  return `${game.nome}/${sub.caminho}/${rel}`;
+  return `${sub.caminho}/${rel}`;
 }
 
 /** Verifica se alguém (que não seja você) já está revisando esse arquivo.
  *  Se estiver livre (ou for você mesmo reabrindo), registra sua presença
  *  e libera a entrada. Se estiver ocupado por outra pessoa, NÃO registra
  *  nada e retorna quem está com ele — quem chamou deve bloquear a entrada. */
-async function registerPresence(pathLabel) {
+async function registerPresence(game, pathLabel) {
   try {
-    const { list, sha } = await readPresence();
+    const { list, sha } = await readPresence(game);
     const occupant = list.find((p) => p.arquivo === pathLabel && p.usuario !== RT.state.username);
     if (occupant) return { blocked: true, occupant };
 
     const others = list.filter((p) => p.arquivo !== pathLabel);
     others.push({ arquivo: pathLabel, usuario: RT.state.username, desde: new Date().toISOString() });
-    await writePresence(others, sha);
+    await writePresence(game, others, sha);
     return { blocked: false };
   } catch (e) {
     return { blocked: false }; // presença é best-effort — não impede a revisão se a checagem falhar
@@ -908,11 +915,11 @@ async function registerPresence(pathLabel) {
 async function releasePresence() {
   if (!RT.state.file) return;
   try {
-    const { list, sha } = await readPresence();
+    const { list, sha } = await readPresence(RT.state.file.game);
     const remaining = list.filter(
       (p) => !(p.arquivo === RT.state.file.pathLabel && p.usuario === RT.state.username)
     );
-    if (remaining.length !== list.length) await writePresence(remaining, sha);
+    if (remaining.length !== list.length) await writePresence(RT.state.file.game, remaining, sha);
   } catch (e) {
     /* best-effort */
   }
@@ -975,7 +982,7 @@ async function openReview(gameIdx, sub, rel) {
   const game = RT.state.games[gameIdx];
   const pathLabel = filePathFor(gameIdx, sub, rel);
 
-  const presenceResult = await registerPresence(pathLabel);
+  const presenceResult = await registerPresence(game, pathLabel);
   if (presenceResult.blocked) {
     toast(
       `Este arquivo já está sendo revisado por ${presenceResult.occupant.usuario} agora. Tente outro arquivo ou aguarde.`,
@@ -994,7 +1001,7 @@ async function openReview(gameIdx, sub, rel) {
     const [original, translated, metaFile] = await Promise.all([
       gh().getFile(game.owner, game.repo, `Originais/${sub.caminho}/${rel}`, game.branch),
       gh().getFile(game.owner, game.repo, `Traduzidas/${sub.caminho}/${rel}`, game.branch),
-      gh().getFile(game.owner, game.repo, `Traduzidas/${sub.caminho}/.revisao/${rel}.json`, game.branch),
+      gh().getFile(game.owner, game.repo, metaPath(sub, rel), game.branch),
     ]);
 
     if (!original || !translated) throw new Error("Arquivo original ou traduzido não encontrado.");
@@ -1181,12 +1188,7 @@ async function saveReview() {
   try {
     const [latestTranslated, latestMetaFile] = await Promise.all([
       gh().getFile(f.game.owner, f.game.repo, `Traduzidas/${f.sub.caminho}/${f.rel}`, f.game.branch),
-      gh().getFile(
-        f.game.owner,
-        f.game.repo,
-        `Traduzidas/${f.sub.caminho}/.revisao/${f.rel}.json`,
-        f.game.branch
-      ),
+      gh().getFile(f.game.owner, f.game.repo, metaPath(f.sub, f.rel), f.game.branch),
     ]);
     const latestExtract = RT.parse.extract(f.sub.formato, latestTranslated.text, f.sub.campos);
     const latestTransById = new Map(latestExtract.entries.map((e) => [e.id, e.value]));
@@ -1241,7 +1243,7 @@ async function saveReview() {
     await gh().putFile(
       f.game.owner,
       f.game.repo,
-      `Traduzidas/${f.sub.caminho}/.revisao/${f.rel}.json`,
+      metaPath(f.sub, f.rel),
       JSON.stringify(newMeta, null, 2),
       latestMetaFile ? latestMetaFile.sha : undefined,
       f.game.branch,

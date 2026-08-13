@@ -32,14 +32,24 @@ NomeDoRepo/
     <subpasta>/
       arquivo1.json      (mesmo nome, texto já traduzido)
       arquivo2.xml
-      .revisao/          (criado automaticamente pela ferramenta)
+  StarlightTool/          (criada e mantida automaticamente pela ferramenta)
+    revisao/
+      <subpasta>/
         arquivo1.json.json
         arquivo2.xml.json
+    progresso.json
+    presenca.json
 ```
 
-A pasta `.revisao/` guarda status, comentário e revisor de cada item —
-**nunca** mexe no arquivo de tradução em si além do texto, então o jogo
-continua lendo o arquivo normalmente.
+A pasta `Traduzidas/` fica sempre limpa — a ferramenta nunca mexe nela além
+do texto dos itens em si, então o jogo continua lendo os arquivos
+normalmente. Tudo que é "da ferramenta" (status/comentário/revisor de cada
+item, cache de progresso, quem está revisando o quê agora) fica dentro de
+`StarlightTool/`, separado das pastas de tradução de verdade. Isso também
+significa que quem tem permissão de escrita no repositório do jogo (o
+mínimo necessário pra revisar) automaticamente já consegue gravar esses
+arquivos também — não depende de nenhuma permissão extra no repositório da
+ferramenta.
 
 ## 3. Cadastrando um jogo
 
@@ -120,10 +130,10 @@ subpasta e arquivo — não precisa mais clicar em nenhum botão:
 
 - **Tradução**: calculada na hora, olhando só a árvore de arquivos do
   repositório (rápido, sem ler o conteúdo de nada).
-- **Revisão**: vem de um cache (`progresso.json`, salvo no repositório da
-  própria ferramenta) que é atualizado automaticamente sempre que alguém
-  **abre ou salva** uma revisão. Isso também alimenta o painel de **%
-  revisado por pessoa**, que aparece ao entrar num jogo.
+- **Revisão**: vem de um cache (`StarlightTool/progresso.json`, salvo
+  DENTRO do repositório de cada jogo) que é atualizado automaticamente
+  sempre que alguém **abre ou salva** uma revisão. Isso também alimenta o
+  painel de **% revisado por pessoa**, que aparece ao entrar num jogo.
 
   Importante: um arquivo só entra na conta depois de ser aberto pelo menos
   uma vez (é só assim que a ferramenta sabe quantos itens ele tem). Quem é
@@ -136,7 +146,14 @@ subpasta e arquivo — não precisa mais clicar em nenhum botão:
 
 Presença agora **bloqueia de verdade**: se alguém já está revisando um
 arquivo, ele aparece cinza com a etiqueta "em revisão: fulano" na lista, e
-tentar abrir mostra um aviso em vez de deixar entrar.
+tentar abrir mostra um aviso em vez de deixar entrar. Assim como o
+progresso, isso é salvo em `StarlightTool/presenca.json`, dentro do
+repositório do jogo — não no repositório da ferramenta. Isso é proposital:
+quem revisa já precisa ter permissão de escrita no repositório do jogo pra
+salvar a tradução, então esse mesmo acesso garante que presença e
+progresso funcionam pra qualquer revisor, sem depender de nenhuma
+permissão extra no repositório da ferramenta (que a maioria dos revisores
+nem tem).
 
 ## 10. Filtro de acesso por jogo
 
