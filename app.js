@@ -1084,18 +1084,21 @@ function renderGlossaryPanelResults() {
     return;
   }
   const q = el("glossaryPanelSearch").value.trim().toLowerCase();
-  const all = [...f.glossaryEntries].sort((a, b) => a.original.localeCompare(b.original));
-  const filtered = q
-    ? all.filter(
-        (e) =>
-          e.original.toLowerCase().includes(q) ||
-          e.traducao.toLowerCase().includes(q) ||
-          (e.contexto || "").toLowerCase().includes(q)
-      )
-    : all;
+  if (!q) {
+    box.innerHTML = `<p class="glossary-panel__empty">Digite pra buscar um termo.</p>`;
+    return;
+  }
+  const filtered = [...f.glossaryEntries]
+    .sort((a, b) => a.original.localeCompare(b.original))
+    .filter(
+      (e) =>
+        e.original.toLowerCase().includes(q) ||
+        e.traducao.toLowerCase().includes(q) ||
+        (e.contexto || "").toLowerCase().includes(q)
+    );
 
   if (filtered.length === 0) {
-    box.innerHTML = `<p class="glossary-panel__empty">${q ? "Nenhum termo encontrado." : "Nenhum termo cadastrado ainda."}</p>`;
+    box.innerHTML = `<p class="glossary-panel__empty">Nenhum termo encontrado.</p>`;
     return;
   }
 
@@ -1121,7 +1124,9 @@ el("glossaryPanelSearch").addEventListener("input", renderGlossaryPanelResults);
 
 el("btnGlossaryPanelToggleAdd").addEventListener("click", () => {
   const form = el("glossaryPanelAddForm");
+  const btn = el("btnGlossaryPanelToggleAdd");
   form.hidden = !form.hidden;
+  btn.textContent = form.hidden ? "+ adicionar termo" : "Cancelar";
   if (!form.hidden) el("gpOriginal").focus();
 });
 
@@ -1141,6 +1146,7 @@ el("btnGlossaryPanelSave").addEventListener("click", async () => {
     el("gpTraducao").value = "";
     el("gpContexto").value = "";
     el("glossaryPanelAddForm").hidden = true;
+    el("btnGlossaryPanelToggleAdd").textContent = "+ adicionar termo";
     toast("Termo adicionado ao glossário.");
     renderGlossaryPanelResults();
   } catch (e) {
@@ -1351,6 +1357,7 @@ async function openReview(gameIdx, sub, rel) {
     // reseta o painel de glossário e carrega os termos desse jogo
     el("glossaryPanelSearch").value = "";
     el("glossaryPanelAddForm").hidden = true;
+    el("btnGlossaryPanelToggleAdd").textContent = "+ adicionar termo";
     el("gpOriginal").value = "";
     el("gpTraducao").value = "";
     el("gpContexto").value = "";
