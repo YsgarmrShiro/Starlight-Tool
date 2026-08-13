@@ -122,8 +122,18 @@ subpasta e arquivo — não precisa mais clicar em nenhum botão:
   repositório (rápido, sem ler o conteúdo de nada).
 - **Revisão**: vem de um cache (`progresso.json`, salvo no repositório da
   própria ferramenta) que é atualizado automaticamente sempre que alguém
-  salva uma revisão. Isso também alimenta o painel de **% revisado por
-  pessoa**, que aparece ao entrar num jogo.
+  **abre ou salva** uma revisão. Isso também alimenta o painel de **%
+  revisado por pessoa**, que aparece ao entrar num jogo.
+
+  Importante: um arquivo só entra na conta depois de ser aberto pelo menos
+  uma vez (é só assim que a ferramenta sabe quantos itens ele tem). Por
+  isso o chip de Revisão mostra "(N/M arq.)" — quantos dos arquivos
+  traduzidos já têm dado de progresso. Se isso ficar muito incompleto (uma
+  pasta com centenas de arquivos nunca abertos, por exemplo), use o botão
+  **"Escanear progresso completo"** dentro da subpasta — ele lê todos os
+  arquivos traduzidos daquela subpasta de uma vez e recalcula tudo. Pode
+  demorar em pastas muito grandes (a ferramenta avisa antes se forem mais
+  de 150 arquivos).
 
 Presença agora **bloqueia de verdade**: se alguém já está revisando um
 arquivo, ele aparece cinza com a etiqueta "em revisão: fulano" na lista, e

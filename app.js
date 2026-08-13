@@ -253,6 +253,7 @@ function showBrowse() {
   RT.state.cur = null;
   renderCrumbs();
   el("btnBrowseBack").hidden = true;
+  el("btnScanProgress").hidden = true;
   renderGamesBrowse();
 }
 
@@ -285,6 +286,35 @@ function backToFileListing() {
     showBrowse();
   }
 }
+
+el("btnScanProgress").addEventListener("click", async () => {
+  const c = RT.state.cur;
+  if (!c || !c.subpasta || !c.rows) return;
+  const game = RT.state.games[c.gameIdx];
+  const translatedCount = c.rows.filter((r) => r.hasTranslation).length;
+
+  if (translatedCount > 150) {
+    const ok = await confirmDialog(
+      `Essa subpasta tem ${translatedCount} arquivos traduzidos. Escanear todos pode demorar bastante e consumir boa parte do limite de requisições do GitHub. Continuar?`
+    );
+    if (!ok) return;
+  }
+
+  const btn = el("btnScanProgress");
+  btn.disabled = true;
+  try {
+    const result = await scanSubpastaProgress(game, c.subpasta, c.rows, (done, total) => {
+      btn.textContent = `Escaneando... ${done}/${total}`;
+    });
+    toast(`Progresso recalculado: ${result.scanned} arquivo(s) verificados.`);
+    renderFolderLevel();
+  } catch (e) {
+    toast(friendlyError(e), "error");
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Escanear progresso completo";
+  }
+});
 
 el("btnBrowseBack").addEventListener("click", () => {
   const c = RT.state.cur;
@@ -375,7 +405,8 @@ function renderGamesBrowse() {
     computeGameTranslationCoverage(game)
       .then(({ total, matched }) => {
         const holder = card.querySelector(".browse-card__progress");
-        holder.innerHTML = pctChip("Tradução", matched, total) + pctChip("Revisão", rev.aprovados, rev.total);
+        const scanned = countCacheFiles(game, "");
+        holder.innerHTML = pctChip("Tradução", matched, total) + pctChip(`Revisão (${scanned}/${matched} arq.)`, rev.aprovados, rev.total);
       })
       .catch(() => {
         const holder = card.querySelector(".browse-card__progress");
@@ -388,6 +419,7 @@ function renderSubpastasBrowse(gameIdx) {
   RT.state.cur = { gameIdx, subpasta: null };
   renderCrumbs();
   el("btnBrowseBack").hidden = false;
+  el("btnScanProgress").hidden = true;
   const game = RT.state.games[gameIdx];
   const box = el("browseList");
   box.innerHTML = "";
@@ -424,8 +456,9 @@ function renderSubpastasBrowse(gameIdx) {
     box.appendChild(card);
     computeSubTranslationCoverage(game, sub)
       .then(({ total, matched }) => {
+        const scanned = countCacheFiles(game, sub.caminho + "/");
         card.querySelector(".browse-card__progress").innerHTML =
-          pctChip("Tradução", matched, total) + pctChip("Revisão", rev.aprovados, rev.total);
+          pctChip("Tradução", matched, total) + pctChip(`Revisão (${scanned}/${matched} arq.)`, rev.aprovados, rev.total);
       })
       .catch(() => {
         card.querySelector(".browse-card__progress").innerHTML = pctChip("Revisão", rev.aprovados, rev.total);
@@ -444,6 +477,7 @@ async function openSubpasta(gameIdx, sub) {
     const [rows, presenceResult] = await Promise.all([listFilesWithMatch(game, sub), readPresence()]);
     RT.state.cur.rows = rows;
     RT.state.cur.presence = presenceResult.list;
+    el("btnScanProgress").hidden = false;
     renderFolderLevel();
   } catch (e) {
     box.innerHTML = `<p class="empty-state">Erro ao listar arquivos: ${escapeHtml(friendlyError(e))}</p>`;
@@ -626,6 +660,74 @@ async function saveProgressEntry(game, sub, rel, stats) {
   }
 }
 
+/** Registra total/aprovados no cache só se for diferente do que já está lá —
+ *  evita gravar de novo toda vez que alguém simplesmente abre um arquivo
+ *  sem mudar nada. Chamada tanto ao ABRIR (pra contar arquivos nunca vistos)
+ *  quanto ao SALVAR. */
+async function touchProgressEntry(game, sub, rel, stats) {
+  const existing = reviewStatsForFile(game, sub, rel);
+  if (existing && existing.total === stats.total && existing.aprovados === stats.aprovados) return;
+  await saveProgressEntry(game, sub, rel, stats);
+}
+
+/** Lê todos os arquivos traduzidos de uma subpasta (em todas as pastas
+ *  aninhadas) e recalcula o cache de progresso pra cada um, de uma vez.
+ *  Isso resolve arquivos que nunca foram abertos e por isso nunca entraram
+ *  na conta. Pode demorar em pastas com muitos arquivos — por isso é uma
+ *  ação sob demanda, não automática. */
+async function scanSubpastaProgress(game, sub, rows, onProgress) {
+  const translatedRows = rows.filter((r) => r.hasTranslation);
+  const latest = await gh().getFile(TOOL_REPO.owner, TOOL_REPO.repo, PROGRESS_PATH, TOOL_REPO.branch);
+  const data = latest ? JSON.parse(latest.text) : {};
+  const gk = gameKey(game);
+  data[gk] = data[gk] || { arquivos: {} };
+
+  let done = 0;
+  for (const r of translatedRows) {
+    try {
+      const [translated, metaFile] = await Promise.all([
+        gh().getFile(game.owner, game.repo, `Traduzidas/${sub.caminho}/${r.rel}`, game.branch),
+        gh().getFile(game.owner, game.repo, `Traduzidas/${sub.caminho}/.revisao/${r.rel}.json`, game.branch),
+      ]);
+      if (translated) {
+        const { entries } = RT.parse.extract(sub.formato, translated.text, sub.campos);
+        const meta = metaFile ? JSON.parse(metaFile.text) : {};
+        let aprovados = 0;
+        const porUsuario = {};
+        entries.forEach((e) => {
+          const m = meta[e.id];
+          if (m?.status === "approved") {
+            aprovados++;
+            if (m.reviewer) porUsuario[m.reviewer] = (porUsuario[m.reviewer] || 0) + 1;
+          }
+        });
+        data[gk].arquivos[fileKey(sub, r.rel)] = {
+          total: entries.length,
+          aprovados,
+          porUsuario,
+          atualizadoEm: new Date().toISOString(),
+        };
+      }
+    } catch (e) {
+      /* pula esse arquivo em caso de erro e continua os outros */
+    }
+    done++;
+    if (onProgress) onProgress(done, translatedRows.length);
+  }
+
+  await gh().putFile(
+    TOOL_REPO.owner,
+    TOOL_REPO.repo,
+    PROGRESS_PATH,
+    JSON.stringify(data, null, 2),
+    latest ? latest.sha : undefined,
+    TOOL_REPO.branch,
+    `Escaneia progresso de ${sub.caminho} — por ${RT.state.username}`
+  );
+  RT.state.progressData = data;
+  return { scanned: done, total: translatedRows.length };
+}
+
 /** Busca a árvore completa do repositório do jogo UMA VEZ e reaproveita
  *  (jogo → subpastas todas usam a mesma árvore, sem chamadas extras). */
 async function getGameTree(game) {
@@ -718,6 +820,12 @@ function userBreakdownForGame(game) {
 function pctChip(label, num, den) {
   const pct = den ? Math.round((num / den) * 100) : 0;
   return `<span class="pct-chip">${label} ${pct}%</span>`;
+}
+
+function countCacheFiles(game, keyPrefix) {
+  const entry = RT.state.progressData[gameKey(game)];
+  if (!entry) return 0;
+  return Object.keys(entry.arquivos || {}).filter((k) => !keyPrefix || k.startsWith(keyPrefix)).length;
 }
 
 /* =========================================================
@@ -898,6 +1006,18 @@ async function openReview(gameIdx, sub, rel) {
       search: "",
       dirty: false,
     };
+
+    // registra o "tamanho" desse arquivo no cache de progresso mesmo que
+    // ninguém edite nada agora — assim ele para de ficar de fora da conta
+    let aprovadosAtuais = 0;
+    const porUsuarioAtual = {};
+    entries.forEach((e) => {
+      if (e.status === "approved") {
+        aprovadosAtuais++;
+        if (e.reviewer) porUsuarioAtual[e.reviewer] = (porUsuarioAtual[e.reviewer] || 0) + 1;
+      }
+    });
+    touchProgressEntry(game, sub, rel, { total: entries.length, aprovados: aprovadosAtuais, porUsuario: porUsuarioAtual });
 
     const draft = loadDraft(RT.state.file);
     if (draft && Object.keys(draft.changed).length > 0) {
