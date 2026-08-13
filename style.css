@@ -246,6 +246,25 @@ code{ background:var(--panel-alt); padding:1px 6px; border-radius:5px; font-fami
 .modal-card p{ margin:0 0 18px; font-size:14px; line-height:1.5; color:var(--text); }
 .modal-actions{ display:flex; justify-content:flex-end; gap:8px; }
 
+/* ===== GLOSSÁRIO ===== */
+.glossary{ max-width:1000px; margin:0 auto; padding:32px 20px 80px; }
+.glossary__header{ display:flex; align-items:center; gap:14px; margin-bottom:22px; flex-wrap:wrap; }
+.glossary__header h2{ margin:0; font-size:18px; flex:1; }
+.glossary__header #glossarySearch{ background:var(--panel-alt); border:1px solid var(--border); border-radius:var(--radius-sm); padding:8px 11px; color:var(--text); font-size:13px; min-width:200px; }
+.glossary__table-wrap{ background:var(--panel-solid); border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; }
+.glossary__table{ width:100%; border-collapse:collapse; }
+.glossary__table th{ text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:.05em; color:var(--text-faint); padding:12px 16px; border-bottom:1px solid var(--border); background:var(--panel-alt); }
+.glossary__table td{ padding:10px 16px; border-bottom:1px solid var(--border); font-size:13px; vertical-align:top; }
+.glossary__table tr:last-child td{ border-bottom:none; }
+.glossary__table td.gt-original{ font-family:var(--mono); color:var(--text-dim); }
+.glossary__table td.gt-context{ color:var(--text-faint); font-size:12px; }
+.glossary__table td.gt-author{ color:var(--text-faint); font-size:11px; white-space:nowrap; }
+.glossary__table td.gt-actions{ white-space:nowrap; text-align:right; }
+.glossary__table input, .glossary__table textarea{ width:100%; background:var(--panel-alt); border:1px solid var(--border); border-radius:var(--radius-sm); padding:6px 9px; color:var(--text); font-size:13px; font-family:inherit; }
+.gt-btn{ border:none; background:transparent; color:var(--text-faint); cursor:pointer; font-size:12px; padding:4px 6px; }
+.gt-btn:hover{ color:var(--text); }
+.gt-btn--danger:hover{ color:var(--danger); }
+
 /* ===== TOAST ===== */
 .toast{ position:fixed; bottom:24px; left:50%; transform:translateX(-50%); background:var(--panel-solid); border:1px solid var(--border); border-radius:var(--radius-sm); padding:11px 20px; font-size:13px; box-shadow:0 10px 34px rgba(0,0,0,.4); max-width:80vw; z-index:50; }
 .toast--error{ border-color:var(--danger); color:var(--danger); }

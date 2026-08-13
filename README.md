@@ -39,6 +39,7 @@ NomeDoRepo/
         arquivo2.xml.json
     progresso.json
     presenca.json
+    glossario.json
 ```
 
 A pasta `Traduzidas/` fica sempre limpa — a ferramenta nunca mexe nela além
@@ -167,6 +168,22 @@ Isso vale só pra tela de navegação/revisão — quem é **admin** continua
 vendo todos os jogos na tela de Configurações, mesmo sem acesso pessoal ao
 repositório de tradução deles, já que ali o que importa é gerenciar o
 cadastro, não revisar.
+
+## 11. Glossário
+
+Cada jogo tem seu próprio glossário — uma tabela de termos com **original**,
+**tradução** e uma **observação/contexto** opcional, pra manter consistência
+entre revisores diferentes. Fica salvo em `StarlightTool/glossario.json`,
+dentro do repositório do jogo.
+
+Qualquer pessoa com permissão de escrita no repositório do jogo (ou seja,
+qualquer revisor que já consegue revisar aquele jogo) pode adicionar,
+editar ou remover termos — não é uma função exclusiva de admin.
+
+O botão **"📖 Glossário"** aparece assim que você entra num jogo (tanto na
+tela de navegação quanto dentro da tela de revisão, pra consultar sem
+perder o que estava editando). Cada termo tem busca por texto, e cada
+edição é salva na hora — sem precisar de um botão "salvar tudo" separado.
 
 ## Limitações conhecidas desta primeira versão (pra ajustar depois)
 

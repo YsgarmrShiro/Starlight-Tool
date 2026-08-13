@@ -64,7 +64,7 @@ function confirmDialog(message) {
    TELAS
    ========================================================= */
 function hideAllScreens() {
-  ["screenLogin", "screenConfig", "screenBrowse", "screenReview"].forEach((id) => (el(id).hidden = true));
+  ["screenLogin", "screenConfig", "screenBrowse", "screenReview", "screenGlossary"].forEach((id) => (el(id).hidden = true));
 }
 
 /* =========================================================
@@ -274,6 +274,7 @@ function showBrowse() {
   el("btnBrowseBack").hidden = true;
   el("btnScanProgress").hidden = true;
   el("scanStatus").hidden = true;
+  el("btnOpenGlossary").hidden = true;
   renderGamesBrowse();
 }
 
@@ -452,6 +453,7 @@ function renderSubpastasBrowse(gameIdx) {
   el("btnBrowseBack").hidden = false;
   el("btnScanProgress").hidden = true;
   el("scanStatus").hidden = true;
+  el("btnOpenGlossary").hidden = false;
   const game = RT.state.games[gameIdx];
   const box = el("browseList");
   box.innerHTML = "";
@@ -865,6 +867,203 @@ function countCacheFiles(game, keyPrefix) {
 }
 
 /* =========================================================
+   GLOSSÁRIO — termos consultáveis por jogo. Qualquer pessoa com
+   permissão de escrita no repositório do jogo pode adicionar,
+   editar ou remover termos. Fica em StarlightTool/glossario.json,
+   dentro do repositório de cada jogo.
+   ========================================================= */
+const GLOSSARY_PATH = `${STARLIGHT_FOLDER}/glossario.json`;
+
+function genId() {
+  return Math.random().toString(36).slice(2, 10);
+}
+
+async function loadGlossary(game) {
+  const f = await gh().getFile(game.owner, game.repo, GLOSSARY_PATH, game.branch);
+  return f ? JSON.parse(f.text) : [];
+}
+
+async function glossaryAdd(game, entry) {
+  const latest = await gh().getFile(game.owner, game.repo, GLOSSARY_PATH, game.branch);
+  const list = latest ? JSON.parse(latest.text) : [];
+  list.push({
+    id: genId(),
+    original: entry.original,
+    traducao: entry.traducao,
+    contexto: entry.contexto || "",
+    criadoPor: RT.state.username,
+    atualizadoEm: new Date().toISOString(),
+  });
+  await gh().putFile(
+    game.owner,
+    game.repo,
+    GLOSSARY_PATH,
+    JSON.stringify(list, null, 2),
+    latest ? latest.sha : undefined,
+    game.branch,
+    `Adiciona termo ao glossário — por ${RT.state.username}`
+  );
+  return list;
+}
+
+async function glossaryUpdate(game, id, changes) {
+  const latest = await gh().getFile(game.owner, game.repo, GLOSSARY_PATH, game.branch);
+  const list = latest ? JSON.parse(latest.text) : [];
+  const idx = list.findIndex((e) => e.id === id);
+  if (idx === -1) throw new Error("Esse termo não existe mais (pode ter sido removido por outra pessoa nesse meio tempo).");
+  list[idx] = { ...list[idx], ...changes, criadoPor: list[idx].criadoPor, atualizadoEm: new Date().toISOString() };
+  await gh().putFile(
+    game.owner,
+    game.repo,
+    GLOSSARY_PATH,
+    JSON.stringify(list, null, 2),
+    latest.sha,
+    game.branch,
+    `Edita termo do glossário — por ${RT.state.username}`
+  );
+  return list;
+}
+
+async function glossaryDelete(game, id) {
+  const latest = await gh().getFile(game.owner, game.repo, GLOSSARY_PATH, game.branch);
+  const list = latest ? JSON.parse(latest.text) : [];
+  const newList = list.filter((e) => e.id !== id);
+  await gh().putFile(
+    game.owner,
+    game.repo,
+    GLOSSARY_PATH,
+    JSON.stringify(newList, null, 2),
+    latest ? latest.sha : undefined,
+    game.branch,
+    `Remove termo do glossário — por ${RT.state.username}`
+  );
+  return newList;
+}
+
+async function openGlossary(gameIdx, cameFromReview) {
+  const game = RT.state.games[gameIdx];
+  RT.state.glossary = { gameIdx, game, entries: [], search: "", cameFromReview: !!cameFromReview };
+  hideAllScreens();
+  el("screenGlossary").hidden = false;
+  el("glossaryTitle").textContent = `Glossário — ${game.nome}`;
+  el("glossarySearch").value = "";
+  el("glossaryBody").innerHTML = `<tr><td colspan="5" class="empty-state">Carregando...</td></tr>`;
+  try {
+    RT.state.glossary.entries = await loadGlossary(game);
+    renderGlossaryTable();
+  } catch (e) {
+    el("glossaryBody").innerHTML = `<tr><td colspan="5" class="empty-state">Erro ao carregar: ${escapeHtml(friendlyError(e))}</td></tr>`;
+  }
+}
+
+el("btnGlossaryBack").addEventListener("click", () => {
+  const g = RT.state.glossary;
+  if (g?.cameFromReview && RT.state.file) {
+    hideAllScreens();
+    el("screenReview").hidden = false;
+  } else {
+    backToFileListing();
+  }
+});
+
+el("glossarySearch").addEventListener("input", (e) => {
+  RT.state.glossary.search = e.target.value;
+  renderGlossaryTable();
+});
+
+el("btnGlossaryAdd").addEventListener("click", () => {
+  renderGlossaryTable({ addingNew: true });
+});
+
+function renderGlossaryTable(opts = {}) {
+  const g = RT.state.glossary;
+  const body = el("glossaryBody");
+  const q = g.search.trim().toLowerCase();
+  const list = g.entries
+    .filter((e) => !q || e.original.toLowerCase().includes(q) || e.traducao.toLowerCase().includes(q) || (e.contexto || "").toLowerCase().includes(q))
+    .sort((a, b) => a.original.localeCompare(b.original));
+
+  body.innerHTML = "";
+  el("glossaryEmpty").hidden = list.length > 0 || opts.addingNew;
+
+  if (opts.addingNew) {
+    body.appendChild(glossaryEditRow(null));
+  }
+
+  list.forEach((entry) => {
+    body.appendChild(glossaryDisplayRow(entry));
+  });
+}
+
+function glossaryDisplayRow(entry) {
+  const tr = document.createElement("tr");
+  tr.innerHTML = `
+    <td class="gt-original">${escapeHtml(entry.original)}</td>
+    <td>${escapeHtml(entry.traducao)}</td>
+    <td class="gt-context">${escapeHtml(entry.contexto || "")}</td>
+    <td class="gt-author">${escapeHtml(entry.criadoPor || "")}</td>
+    <td class="gt-actions">
+      <button class="gt-btn gt-edit" title="Editar">✏️</button>
+      <button class="gt-btn gt-btn--danger gt-delete" title="Remover">🗑️</button>
+    </td>
+  `;
+  tr.querySelector(".gt-edit").addEventListener("click", () => {
+    tr.replaceWith(glossaryEditRow(entry));
+  });
+  tr.querySelector(".gt-delete").addEventListener("click", async () => {
+    const ok = await confirmDialog(`Remover o termo "${entry.original}" do glossário?`);
+    if (!ok) return;
+    try {
+      RT.state.glossary.entries = await glossaryDelete(RT.state.glossary.game, entry.id);
+      toast("Termo removido.");
+      renderGlossaryTable();
+    } catch (e) {
+      toast(friendlyError(e), "error");
+    }
+  });
+  return tr;
+}
+
+function glossaryEditRow(entry) {
+  const isNew = !entry;
+  const tr = document.createElement("tr");
+  tr.innerHTML = `
+    <td><input class="ge-original" placeholder="termo original" value="${entry ? escapeAttr(entry.original) : ""}"></td>
+    <td><input class="ge-traducao" placeholder="tradução" value="${entry ? escapeAttr(entry.traducao) : ""}"></td>
+    <td><input class="ge-contexto" placeholder="observação / contexto (opcional)" value="${entry ? escapeAttr(entry.contexto || "") : ""}"></td>
+    <td class="gt-author">${entry ? escapeHtml(entry.criadoPor || "") : "você"}</td>
+    <td class="gt-actions">
+      <button class="gt-btn ge-save" title="Salvar">✔️</button>
+      <button class="gt-btn ge-cancel" title="Cancelar">✖️</button>
+    </td>
+  `;
+  const save = async () => {
+    const original = tr.querySelector(".ge-original").value.trim();
+    const traducao = tr.querySelector(".ge-traducao").value.trim();
+    const contexto = tr.querySelector(".ge-contexto").value.trim();
+    if (!original || !traducao) {
+      toast("Preencha ao menos o termo original e a tradução.", "error");
+      return;
+    }
+    try {
+      if (isNew) {
+        RT.state.glossary.entries = await glossaryAdd(RT.state.glossary.game, { original, traducao, contexto });
+        toast("Termo adicionado.");
+      } else {
+        RT.state.glossary.entries = await glossaryUpdate(RT.state.glossary.game, entry.id, { original, traducao, contexto });
+        toast("Termo atualizado.");
+      }
+      renderGlossaryTable();
+    } catch (e) {
+      toast(friendlyError(e), "error");
+    }
+  };
+  tr.querySelector(".ge-save").addEventListener("click", save);
+  tr.querySelector(".ge-cancel").addEventListener("click", () => renderGlossaryTable());
+  return tr;
+}
+
+/* =========================================================
    PRESENÇA — quem está revisando o quê agora
    ========================================================= */
 const PRESENCE_PATH = `${STARLIGHT_FOLDER}/presenca.json`;
@@ -974,6 +1173,14 @@ function loadDraft(f) {
 function clearDraft(f) {
   localStorage.removeItem(draftKeyFor(f));
 }
+
+el("btnOpenGlossary").addEventListener("click", () => {
+  if (RT.state.cur?.gameIdx !== undefined) openGlossary(RT.state.cur.gameIdx, false);
+});
+
+el("btnOpenGlossaryFromReview").addEventListener("click", () => {
+  if (RT.state.file) openGlossary(RT.state.file.gameIdx, true);
+});
 
 /* =========================================================
    REVISÃO — abrir arquivo, renderizar, salvar

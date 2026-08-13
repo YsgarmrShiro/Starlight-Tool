@@ -98,6 +98,7 @@
       <button class="btn btn--ghost btn--small" id="btnBrowseBack" hidden>← voltar</button>
       <div class="crumbs" id="crumbs"></div>
       <span class="scan-status" id="scanStatus" hidden></span>
+      <button class="btn btn--ghost btn--small" id="btnOpenGlossary" hidden>📖 Glossário</button>
       <button class="btn btn--ghost btn--small" id="btnScanProgress" hidden>Escanear progresso completo</button>
     </div>
     <div id="browseList" class="browse-list"></div>
@@ -107,6 +108,7 @@
   <main class="app" id="screenReview" hidden>
     <aside class="sidebar">
       <button class="btn btn--ghost btn--small btn--back" id="btnBackToBrowse">← voltar</button>
+      <button class="btn btn--ghost btn--small" id="btnOpenGlossaryFromReview">📖 Ver glossário</button>
 
       <div class="sidebar__block" id="presenceBanner" hidden></div>
 
@@ -138,6 +140,31 @@
 
     <section class="entries" id="entries"></section>
   </main>
+
+  <!-- ===== GLOSSÁRIO ===== -->
+  <section class="glossary" id="screenGlossary" hidden>
+    <div class="glossary__header">
+      <button class="btn btn--ghost btn--small" id="btnGlossaryBack">← voltar</button>
+      <h2 id="glossaryTitle">Glossário</h2>
+      <input type="text" id="glossarySearch" placeholder="Buscar termo...">
+      <button class="btn btn--primary btn--small" id="btnGlossaryAdd">+ novo termo</button>
+    </div>
+    <div class="glossary__table-wrap">
+      <table class="glossary__table">
+        <thead>
+          <tr>
+            <th>Original</th>
+            <th>Tradução</th>
+            <th>Observação / contexto</th>
+            <th>Por</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="glossaryBody"></tbody>
+      </table>
+      <p class="empty-state" id="glossaryEmpty" hidden>Nenhum termo cadastrado ainda.</p>
+    </div>
+  </section>
 
   <div class="toast" id="toast" hidden></div>
 
