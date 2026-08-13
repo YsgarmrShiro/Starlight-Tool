@@ -180,10 +180,15 @@ Qualquer pessoa com permissão de escrita no repositório do jogo (ou seja,
 qualquer revisor que já consegue revisar aquele jogo) pode adicionar,
 editar ou remover termos — não é uma função exclusiva de admin.
 
-O botão **"📖 Glossário"** aparece assim que você entra num jogo (tanto na
-tela de navegação quanto dentro da tela de revisão, pra consultar sem
-perder o que estava editando). Cada termo tem busca por texto, e cada
-edição é salva na hora — sem precisar de um botão "salvar tudo" separado.
+O botão **"📖 Glossário"** aparece assim que você entra num jogo, na tela de
+navegação, abrindo a tabela completa (com busca, edição e remoção).
+
+Dentro da própria tela de revisão, tem um **painel fixo na lateral
+direita** com uma busca rápida (mostra até 5 termos por vez) e um atalho
+pra adicionar um termo novo sem sair de onde você está revisando. Ele fica
+"grudado" na tela, acompanhando a rolagem junto com o menu da esquerda. No
+fim desse painel tem um link "Ver glossário completo" que leva pra tabela
+inteira, se precisar editar ou remover algo.
 
 ## Limitações conhecidas desta primeira versão (pra ajustar depois)
 

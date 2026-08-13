@@ -1063,6 +1063,93 @@ function glossaryEditRow(entry) {
   return tr;
 }
 
+/* ---------- painel compacto de glossário (dentro da tela de revisão) ---------- */
+const GLOSSARY_PANEL_LIMIT = 5;
+
+async function loadGlossaryForReview(game) {
+  try {
+    const entries = await loadGlossary(game);
+    RT.state.file.glossaryEntries = entries;
+  } catch (e) {
+    RT.state.file.glossaryEntries = [];
+  }
+  renderGlossaryPanelResults();
+}
+
+function renderGlossaryPanelResults() {
+  const f = RT.state.file;
+  const box = el("glossaryPanelResults");
+  if (!f || !f.glossaryEntries) {
+    box.innerHTML = `<p class="glossary-panel__empty">Carregando...</p>`;
+    return;
+  }
+  const q = el("glossaryPanelSearch").value.trim().toLowerCase();
+  const all = [...f.glossaryEntries].sort((a, b) => a.original.localeCompare(b.original));
+  const filtered = q
+    ? all.filter(
+        (e) =>
+          e.original.toLowerCase().includes(q) ||
+          e.traducao.toLowerCase().includes(q) ||
+          (e.contexto || "").toLowerCase().includes(q)
+      )
+    : all;
+
+  if (filtered.length === 0) {
+    box.innerHTML = `<p class="glossary-panel__empty">${q ? "Nenhum termo encontrado." : "Nenhum termo cadastrado ainda."}</p>`;
+    return;
+  }
+
+  const shown = filtered.slice(0, GLOSSARY_PANEL_LIMIT);
+  box.innerHTML = shown
+    .map(
+      (e) => `
+      <div class="glossary-panel__term">
+        <div class="gp-original">${escapeHtml(e.original)}</div>
+        <div class="gp-traducao">${escapeHtml(e.traducao)}</div>
+        ${e.contexto ? `<div class="gp-contexto">${escapeHtml(e.contexto)}</div>` : ""}
+      </div>
+    `
+    )
+    .join("");
+
+  if (filtered.length > GLOSSARY_PANEL_LIMIT) {
+    box.innerHTML += `<p class="glossary-panel__more">+ ${filtered.length - GLOSSARY_PANEL_LIMIT} termo(s) — refine a busca ou veja o glossário completo</p>`;
+  }
+}
+
+el("glossaryPanelSearch").addEventListener("input", renderGlossaryPanelResults);
+
+el("btnGlossaryPanelToggleAdd").addEventListener("click", () => {
+  const form = el("glossaryPanelAddForm");
+  form.hidden = !form.hidden;
+  if (!form.hidden) el("gpOriginal").focus();
+});
+
+el("btnGlossaryPanelSave").addEventListener("click", async () => {
+  const original = el("gpOriginal").value.trim();
+  const traducao = el("gpTraducao").value.trim();
+  const contexto = el("gpContexto").value.trim();
+  if (!original || !traducao) {
+    toast("Preencha ao menos o termo original e a tradução.", "error");
+    return;
+  }
+  const btn = el("btnGlossaryPanelSave");
+  btn.disabled = true;
+  try {
+    RT.state.file.glossaryEntries = await glossaryAdd(RT.state.file.game, { original, traducao, contexto });
+    el("gpOriginal").value = "";
+    el("gpTraducao").value = "";
+    el("gpContexto").value = "";
+    el("glossaryPanelAddForm").hidden = true;
+    toast("Termo adicionado ao glossário.");
+    renderGlossaryPanelResults();
+  } catch (e) {
+    toast(friendlyError(e), "error");
+  } finally {
+    btn.disabled = false;
+  }
+});
+
 /* =========================================================
    PRESENÇA — quem está revisando o quê agora
    ========================================================= */
@@ -1178,7 +1265,7 @@ el("btnOpenGlossary").addEventListener("click", () => {
   if (RT.state.cur?.gameIdx !== undefined) openGlossary(RT.state.cur.gameIdx, false);
 });
 
-el("btnOpenGlossaryFromReview").addEventListener("click", () => {
+el("linkGlossaryFull").addEventListener("click", () => {
   if (RT.state.file) openGlossary(RT.state.file.gameIdx, true);
 });
 
@@ -1260,6 +1347,16 @@ async function openReview(gameIdx, sub, rel) {
       }
     });
     touchProgressEntry(game, sub, rel, { total: entries.length, aprovados: aprovadosAtuais, porUsuario: porUsuarioAtual });
+
+    // reseta o painel de glossário e carrega os termos desse jogo
+    el("glossaryPanelSearch").value = "";
+    el("glossaryPanelAddForm").hidden = true;
+    el("gpOriginal").value = "";
+    el("gpTraducao").value = "";
+    el("gpContexto").value = "";
+    RT.state.file.glossaryEntries = null;
+    renderGlossaryPanelResults();
+    loadGlossaryForReview(game);
 
     const draft = loadDraft(RT.state.file);
     if (draft && Object.keys(draft.changed).length > 0) {

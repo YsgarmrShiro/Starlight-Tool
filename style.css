@@ -185,8 +185,26 @@ code{ background:var(--panel-alt); padding:1px 6px; border-radius:5px; font-fami
 .empty-state{ color:var(--text-faint); font-size:14px; margin-top:50px; text-align:center; }
 
 /* ===== REVIEW APP LAYOUT ===== */
-.app{ display:grid; grid-template-columns:270px 1fr; align-items:start; }
+.app{ display:grid; grid-template-columns:270px 1fr 280px; align-items:start; }
 .sidebar{ border-right:1px solid var(--border); background:rgba(21,24,39,0.5); padding:22px; display:flex; flex-direction:column; gap:22px; position:sticky; top:71px; max-height:calc(100vh - 71px); overflow-y:auto; align-self:start; }
+
+.glossary-panel{
+  border-left:1px solid var(--border); background:rgba(21,24,39,0.5); padding:22px 20px;
+  display:flex; flex-direction:column; gap:16px;
+  position:sticky; top:71px; max-height:calc(100vh - 71px); overflow-y:auto; align-self:start;
+}
+.glossary-panel #glossaryPanelSearch{ background:var(--panel-alt); border:1px solid var(--border); border-radius:var(--radius-sm); padding:8px 11px; color:var(--text); font-size:13px; }
+.glossary-panel__results{ display:flex; flex-direction:column; gap:8px; }
+.glossary-panel__term{ background:var(--panel-solid); border:1px solid var(--border); border-radius:var(--radius-sm); padding:9px 11px; }
+.glossary-panel__term .gp-original{ font-family:var(--mono); font-size:12.5px; color:var(--text); }
+.glossary-panel__term .gp-traducao{ font-size:12.5px; color:var(--accent-2); margin-top:2px; }
+.glossary-panel__term .gp-contexto{ font-size:11px; color:var(--text-faint); margin-top:4px; }
+.glossary-panel__empty{ font-size:12px; color:var(--text-faint); text-align:center; padding:10px 0; }
+.glossary-panel__more{ font-size:11px; color:var(--text-faint); text-align:center; }
+.glossary-panel__add-form{ display:flex; flex-direction:column; gap:8px; margin-top:10px; }
+.glossary-panel__add-form input{ background:var(--panel-alt); border:1px solid var(--border); border-radius:var(--radius-sm); padding:8px 10px; color:var(--text); font-size:12.5px; }
+.glossary-panel__full-link{ font-size:12px; color:var(--text-faint); text-align:center; text-decoration:none; cursor:pointer; margin-top:auto; padding-top:10px; border-top:1px solid var(--border); }
+.glossary-panel__full-link:hover{ color:var(--accent-2); }
 .sidebar__block{ display:flex; flex-direction:column; gap:8px; }
 .sidebar__label{ font-size:11px; text-transform:uppercase; letter-spacing:.07em; color:var(--text-faint); }
 .sidebar__spacer{ flex:1; }
@@ -236,7 +254,8 @@ code{ background:var(--panel-alt); padding:1px 6px; border-radius:5px; font-fami
   .field-grid{ grid-template-columns:1fr; }
   .subpasta-row{ grid-template-columns:1fr; }
   .app{ grid-template-columns:1fr; }
-  .sidebar{ border-right:none; border-bottom:1px solid var(--border); flex-direction:row; flex-wrap:wrap; }
+  .sidebar{ border-right:none; border-bottom:1px solid var(--border); flex-direction:row; flex-wrap:wrap; position:static; max-height:none; }
+  .glossary-panel{ border-left:none; border-top:1px solid var(--border); position:static; max-height:none; }
   .entry{ grid-template-columns:1fr; }
 }
 

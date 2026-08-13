@@ -108,7 +108,6 @@
   <main class="app" id="screenReview" hidden>
     <aside class="sidebar">
       <button class="btn btn--ghost btn--small btn--back" id="btnBackToBrowse">← voltar</button>
-      <button class="btn btn--ghost btn--small" id="btnOpenGlossaryFromReview">📖 Ver glossário</button>
 
       <div class="sidebar__block" id="presenceBanner" hidden></div>
 
@@ -139,6 +138,26 @@
     </aside>
 
     <section class="entries" id="entries"></section>
+
+    <aside class="glossary-panel" id="glossaryPanel">
+      <div class="sidebar__block">
+        <span class="sidebar__label">📖 Glossário</span>
+        <input type="text" id="glossaryPanelSearch" placeholder="Buscar termo...">
+      </div>
+      <div class="glossary-panel__results" id="glossaryPanelResults"></div>
+
+      <div class="glossary-panel__add">
+        <button class="btn btn--ghost btn--small btn--block" id="btnGlossaryPanelToggleAdd">+ adicionar termo</button>
+        <div class="glossary-panel__add-form" id="glossaryPanelAddForm" hidden>
+          <input type="text" id="gpOriginal" placeholder="termo original">
+          <input type="text" id="gpTraducao" placeholder="tradução">
+          <input type="text" id="gpContexto" placeholder="observação (opcional)">
+          <button class="btn btn--primary btn--small btn--block" id="btnGlossaryPanelSave">Salvar termo</button>
+        </div>
+      </div>
+
+      <a class="glossary-panel__full-link" id="linkGlossaryFull">Ver glossário completo →</a>
+    </aside>
   </main>
 
   <!-- ===== GLOSSÁRIO ===== -->
