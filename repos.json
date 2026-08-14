@@ -1,1 +1,24 @@
-[]
+[
+  {
+    "nome": "Trails in the Sky 1º",
+    "owner": "JinYushiyuu",
+    "repo": "Trails-in-the-Sky-1st-Charapter---PT-BR",
+    "branch": "main",
+    "subpastas": [
+      {
+        "caminho": "scrip_en",
+        "formato": "json",
+        "campos": [
+          "text"
+        ]
+      },
+      {
+        "caminho": "table_en",
+        "formato": "json",
+        "campos": [
+          "v"
+        ]
+      }
+    ]
+  }
+]
