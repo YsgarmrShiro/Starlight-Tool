@@ -6,7 +6,7 @@
     "branch": "main",
     "subpastas": [
       {
-        "caminho": "scrip_en",
+        "caminho": "script_en",
         "formato": "json",
         "campos": [
           "text"
