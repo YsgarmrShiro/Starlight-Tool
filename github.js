@@ -12,6 +12,7 @@ RT.github = (() => {
   async function req(path, opts = {}) {
     const res = await fetch(`https://api.github.com${path}`, {
       ...opts,
+      cache: "no-store", // nunca usar resposta guardada em cache pelo navegador — sempre busca a versão real e atual
       headers: {
         Authorization: `token ${token()}`,
         Accept: "application/vnd.github+json",
