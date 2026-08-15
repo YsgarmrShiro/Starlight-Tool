@@ -20,5 +20,27 @@
         ]
       }
     ]
+  },
+  {
+    "nome": "Teste",
+    "owner": "YsgarmrShiro",
+    "repo": "Teste",
+    "branch": "main",
+    "subpastas": [
+      {
+        "caminho": "Pack01",
+        "formato": "json",
+        "campos": [
+          "msg_string"
+        ]
+      },
+      {
+        "caminho": "Pack02",
+        "formato": "json",
+        "campos": [
+          "msg_string"
+        ]
+      }
+    ]
   }
 ]
