@@ -38,7 +38,7 @@
         "caminho": "Pack02",
         "formato": "xml",
         "campos": [
-          "msg_string"
+          "Text"
         ]
       }
     ]
