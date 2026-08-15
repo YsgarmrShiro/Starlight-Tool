@@ -37,8 +37,10 @@ RT.parse = (() => {
         } catch (_) {
           value = quoted.slice(1, -1);
         }
-        entries.push({ id: `${key}#${i}`, value, start, end });
-        i++;
+        const id = `${key}#${i}`;
+        i++; // sempre incrementa, mesmo se pular — mantém o índice alinhado entre original e traduzido
+        if (value.trim() === "") continue; // campo vazio — não vira item de revisão
+        entries.push({ id, value, start, end });
       }
     });
     // ordena pela posição no arquivo, só por conveniência de leitura
@@ -68,11 +70,11 @@ RT.parse = (() => {
     const children = Array.from(el.children);
     children.forEach((child, i) => {
       const childPath = [...path, i];
-      if (fields.has(child.tagName) && child.children.length === 0) {
+      if (fields.has(child.tagName) && child.children.length === 0 && child.textContent.trim() !== "") {
         out.push({ id: childPath.join("."), path: childPath, kind: "text", value: child.textContent });
       }
       Array.from(child.attributes || []).forEach((attr) => {
-        if (fields.has(attr.name)) {
+        if (fields.has(attr.name) && attr.value.trim() !== "") {
           out.push({
             id: childPath.join(".") + "@" + attr.name,
             path: childPath,
