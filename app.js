@@ -17,7 +17,8 @@ const el = (id) => document.getElementById(id);
 let writeQueue = Promise.resolve();
 let pendingWriteCount = 0;
 function updateSyncIndicator() {
-  el("syncIndicator").hidden = pendingWriteCount === 0;
+  const el2 = document.getElementById("syncIndicator");
+  if (el2) el2.hidden = pendingWriteCount === 0;
 }
 function enqueueWrite(fn) {
   pendingWriteCount++;
