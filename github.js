@@ -104,5 +104,61 @@ RT.github = (() => {
     });
   }
 
-  return { req, getUser, getPermission, listDir, listRecursive, getFile, putFile };
+  /** Grava vários arquivos NUM COMMIT SÓ (atômico) — ou todos mudam, ou
+   *  nenhum muda. Usa a Git Data API de baixo nível (blob → tree →
+   *  commit → atualiza a branch), em vez de um PUT por arquivo.
+   *  Se a branch tiver avançado entre o começo e o fim (outro commit
+   *  qualquer aconteceu nesse meio tempo), tenta de novo em cima da
+   *  base mais recente, até um limite de tentativas. */
+  async function commitMultipleFiles(owner, repo, branch, message, files, maxAttempts = 5) {
+    let lastErr;
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      if (attempt > 0) await new Promise((r) => setTimeout(r, 150 + Math.random() * 350));
+
+      const ref = await req(`/repos/${owner}/${repo}/git/ref/heads/${encodeURIComponent(branch)}`);
+      const baseCommitSha = ref.object.sha;
+      const baseCommit = await req(`/repos/${owner}/${repo}/git/commits/${baseCommitSha}`);
+      const baseTreeSha = baseCommit.tree.sha;
+
+      const blobs = await Promise.all(
+        files.map(async (f) => {
+          const blob = await req(`/repos/${owner}/${repo}/git/blobs`, {
+            method: "POST",
+            body: JSON.stringify({ content: b64encode(f.content), encoding: "base64" }),
+          });
+          return { path: f.path, sha: blob.sha };
+        })
+      );
+
+      const newTree = await req(`/repos/${owner}/${repo}/git/trees`, {
+        method: "POST",
+        body: JSON.stringify({
+          base_tree: baseTreeSha,
+          tree: blobs.map((b) => ({ path: b.path, mode: "100644", type: "blob", sha: b.sha })),
+        }),
+      });
+
+      const newCommit = await req(`/repos/${owner}/${repo}/git/commits`, {
+        method: "POST",
+        body: JSON.stringify({ message, tree: newTree.sha, parents: [baseCommitSha] }),
+      });
+
+      try {
+        await req(`/repos/${owner}/${repo}/git/refs/heads/${encodeURIComponent(branch)}`, {
+          method: "PATCH",
+          body: JSON.stringify({ sha: newCommit.sha, force: false }),
+        });
+        return { sha: newCommit.sha };
+      } catch (e) {
+        if (e.status === 422 || e.status === 409) {
+          lastErr = e;
+          continue; // a branch mudou no meio do caminho — tenta de novo em cima da base atual
+        }
+        throw e;
+      }
+    }
+    throw lastErr || new Error("Não foi possível commitar depois de várias tentativas.");
+  }
+
+  return { req, getUser, getPermission, listDir, listRecursive, getFile, putFile, commitMultipleFiles };
 })();

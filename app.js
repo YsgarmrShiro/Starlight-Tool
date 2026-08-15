@@ -6,6 +6,84 @@ function metaPath(sub, rel) {
 }
 
 const el = (id) => document.getElementById(id);
+
+/* =========================================================
+   FILA DE ESCRITAS — evita que duas gravações no mesmo arquivo
+   compartilhado (progresso.json, presenca.json, glossario.json,
+   repos.json) rodem em paralelo e se atropelem. Toda função que
+   faz "lê o mais recente → modifica → grava" nesses arquivos
+   passa por aqui, executando uma de cada vez, na ordem de chegada.
+   ========================================================= */
+let writeQueue = Promise.resolve();
+let pendingWriteCount = 0;
+function updateSyncIndicator() {
+  el("syncIndicator").hidden = pendingWriteCount === 0;
+}
+function enqueueWrite(fn) {
+  pendingWriteCount++;
+  updateSyncIndicator();
+  const run = async () => {
+    try {
+      return await fn();
+    } finally {
+      pendingWriteCount--;
+      updateSyncIndicator();
+    }
+  };
+  const chained = writeQueue.then(run, run);
+  writeQueue = chained.catch(() => {}); // erro de uma tarefa não trava as próximas da fila
+  return chained;
+}
+
+/** Atraso aleatório curto antes de gravar — reduz a chance de duas
+ *  pessoas caírem no mesmíssimo instante e colidirem. */
+function jitterDelay() {
+  return new Promise((r) => setTimeout(r, 50 + Math.random() * 350));
+}
+
+/** "Lê o mais recente → decide o que fazer → grava, tentando de novo se
+ *  alguém escreveu no meio do caminho." Usado por toda gravação em
+ *  arquivo compartilhado (presença, progresso, glossário, cadastro de
+ *  jogos).
+ *
+ *  `mutate(currentData)` recebe os dados atuais (já parseados, ou null
+ *  se o arquivo não existir) e deve retornar um destes três formatos:
+ *    - { data: novoConteudo }              → grava isso
+ *    - { blocked: true, info: {...} }      → não grava nada, devolve
+ *                                             esse motivo pra quem chamou
+ *    - null                                → nada mudou, não precisa gravar
+ *
+ *  Se a gravação esbarrar num conflito (409 — alguém gravou entre a
+ *  leitura e a escrita), busca a versão mais nova e chama `mutate` de
+ *  novo em cima dela, até um limite de tentativas. */
+async function readModifyWrite(owner, repo, path, branch, message, mutate, maxAttempts = 6) {
+  let lastErr;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    await jitterDelay();
+    let latest;
+    try {
+      latest = await gh().getFile(owner, repo, path, branch);
+    } catch (e) {
+      lastErr = e;
+      continue;
+    }
+    const current = latest ? JSON.parse(latest.text) : null;
+    const result = mutate(current);
+    if (!result) return { ok: true, aborted: true };
+    if (result.blocked) return { ok: true, blocked: true, info: result.info };
+    try {
+      await gh().putFile(owner, repo, path, JSON.stringify(result.data, null, 2), latest ? latest.sha : undefined, branch, message);
+      return { ok: true, data: result.data };
+    } catch (e) {
+      if (e.status === 409) {
+        lastErr = e;
+        continue; // alguém gravou primeiro — busca de novo e tenta de novo
+      }
+      throw e;
+    }
+  }
+  throw lastErr || new Error("Não foi possível gravar depois de várias tentativas.");
+}
 const gh = () => RT.github;
 
 RT.state = {
@@ -73,6 +151,7 @@ el("btnHome").addEventListener("click", async () => {
     }
     if (RT.state.file) {
       clearTimeout(draftTimer);
+      stopPresenceHeartbeat();
       await releasePresence();
     }
     showBrowse();
@@ -266,19 +345,16 @@ function openGameForm(index) {
 }
 
 async function saveGames() {
-  const latest = await gh().getFile(TOOL_REPO.owner, TOOL_REPO.repo, "repos.json", TOOL_REPO.branch);
-  const sha = latest ? latest.sha : undefined;
-  await gh().putFile(
-    TOOL_REPO.owner,
-    TOOL_REPO.repo,
-    "repos.json",
-    JSON.stringify(RT.state.games, null, 2),
-    sha,
-    TOOL_REPO.branch,
-    `Atualiza cadastro de jogos — por ${RT.state.username}`
+  await enqueueWrite(() =>
+    readModifyWrite(
+      TOOL_REPO.owner,
+      TOOL_REPO.repo,
+      "repos.json",
+      TOOL_REPO.branch,
+      `Atualiza cadastro de jogos — por ${RT.state.username}`,
+      () => ({ data: RT.state.games }) // sempre grava o que está em memória agora, com sha atualizado a cada tentativa
+    )
   );
-  const refreshed = await gh().getFile(TOOL_REPO.owner, TOOL_REPO.repo, "repos.json", TOOL_REPO.branch);
-  RT.state.gamesSha = refreshed.sha;
 }
 
 /* =========================================================
@@ -304,6 +380,7 @@ el("btnBackToBrowse").addEventListener("click", async () => {
       clearDraft(RT.state.file);
     }
     clearTimeout(draftTimer);
+    stopPresenceHeartbeat();
     await releasePresence();
     backToFileListing();
   } catch (e) {
@@ -598,13 +675,16 @@ function renderFolderLevel() {
     .sort((a, b) => a.name.localeCompare(b.name))
     .forEach((f) => {
       const pathLabel = filePathFor(c.gameIdx, c.subpasta, f.rel);
-      const occupant = c.presence.find((p) => p.arquivo === pathLabel && p.usuario !== RT.state.username);
-      const isBlocked = !!occupant;
+      const entry = c.presence.find((p) => p.arquivo === pathLabel);
+      const isSaving = !!entry?.salvando;
+      const isBusyByOther = !!entry && !isSaving && entry.usuario !== RT.state.username;
+      const isBlocked = isSaving || isBusyByOther;
       const stats = f.hasTranslation ? reviewStatsForFile(game, c.subpasta, f.rel) : null;
 
       let badgeHtml;
       if (!f.hasTranslation) badgeHtml = `<span class="badge badge--missing">Sem tradução</span>`;
-      else if (isBlocked) badgeHtml = `<span class="badge badge--busy">em revisão: ${escapeHtml(occupant.usuario)}</span>`;
+      else if (isSaving) badgeHtml = `<span class="badge badge--busy">salvando...</span>`;
+      else if (isBusyByOther) badgeHtml = `<span class="badge badge--busy">em revisão: ${escapeHtml(entry.usuario)}</span>`;
       else badgeHtml = `<span class="badge badge--ok">Disponível</span>`;
 
       const progressHtml = f.hasTranslation && !isBlocked ? pctChip("Revisão", stats?.aprovados || 0, stats?.total || 0) : "";
@@ -698,20 +778,15 @@ function fileKey(sub, rel) {
 
 async function saveProgressEntry(game, sub, rel, stats) {
   try {
-    const latest = await gh().getFile(game.owner, game.repo, PROGRESS_PATH, game.branch);
-    const data = latest ? JSON.parse(latest.text) : { arquivos: {} };
-    data.arquivos = data.arquivos || {};
-    data.arquivos[fileKey(sub, rel)] = { ...stats, atualizadoEm: new Date().toISOString() };
-    await gh().putFile(
-      game.owner,
-      game.repo,
-      PROGRESS_PATH,
-      JSON.stringify(data, null, 2),
-      latest ? latest.sha : undefined,
-      game.branch,
-      "Atualiza cache de progresso"
+    const result = await enqueueWrite(() =>
+      readModifyWrite(game.owner, game.repo, PROGRESS_PATH, game.branch, "Atualiza cache de progresso", (raw) => {
+        const data = raw || { arquivos: {} };
+        data.arquivos = data.arquivos || {};
+        data.arquivos[fileKey(sub, rel)] = { ...stats, atualizadoEm: new Date().toISOString() };
+        return { data };
+      })
     );
-    RT.state.progressData[gameKey(game)] = data; // mantém a cópia local em dia
+    if (result.data) RT.state.progressData[gameKey(game)] = result.data;
   } catch (e) {
     /* best-effort — não impede o salvamento da revisão em si */
   }
@@ -734,9 +809,7 @@ async function touchProgressEntry(game, sub, rel, stats) {
  *  ação sob demanda, não automática. */
 async function scanSubpastaProgress(game, sub, rows, onProgress) {
   const translatedRows = rows.filter((r) => r.hasTranslation);
-  const latest = await gh().getFile(game.owner, game.repo, PROGRESS_PATH, game.branch);
-  const data = latest ? JSON.parse(latest.text) : { arquivos: {} };
-  data.arquivos = data.arquivos || {};
+  const scanned = {}; // coletado à parte — só mesclamos com o que está no GitHub na hora de gravar
 
   let done = 0;
   for (const r of translatedRows) {
@@ -757,7 +830,7 @@ async function scanSubpastaProgress(game, sub, rows, onProgress) {
             if (m.reviewer) porUsuario[m.reviewer] = (porUsuario[m.reviewer] || 0) + 1;
           }
         });
-        data.arquivos[fileKey(sub, r.rel)] = {
+        scanned[fileKey(sub, r.rel)] = {
           total: entries.length,
           aprovados,
           porUsuario,
@@ -771,16 +844,24 @@ async function scanSubpastaProgress(game, sub, rows, onProgress) {
     if (onProgress) onProgress(done, translatedRows.length);
   }
 
-  await gh().putFile(
-    game.owner,
-    game.repo,
-    PROGRESS_PATH,
-    JSON.stringify(data, null, 2),
-    latest ? latest.sha : undefined,
-    game.branch,
-    `Escaneia progresso de ${sub.caminho} — por ${RT.state.username}`
+  // grava por cima da versão mais recente (que pode ter mudado durante o
+  // escaneamento, por causa de outras pessoas salvando enquanto isso) —
+  // nossos dados escaneados têm prioridade, o resto é preservado
+  const result = await enqueueWrite(() =>
+    readModifyWrite(
+      game.owner,
+      game.repo,
+      PROGRESS_PATH,
+      game.branch,
+      `Escaneia progresso de ${sub.caminho} — por ${RT.state.username}`,
+      (raw) => {
+        const data = raw || { arquivos: {} };
+        data.arquivos = { ...data.arquivos, ...scanned };
+        return { data };
+      }
+    )
   );
-  RT.state.progressData[gameKey(game)] = data;
+  if (result.data) RT.state.progressData[gameKey(game)] = result.data;
   return { scanned: done, total: translatedRows.length };
 }
 
@@ -902,60 +983,70 @@ async function loadGlossary(game) {
 }
 
 async function glossaryAdd(game, entry) {
-  const latest = await gh().getFile(game.owner, game.repo, GLOSSARY_PATH, game.branch);
-  const list = latest ? JSON.parse(latest.text) : [];
-  list.push({
-    id: genId(),
-    original: entry.original,
-    traducao: entry.traducao,
-    contexto: entry.contexto || "",
-    criadoPor: RT.state.username,
-    atualizadoEm: new Date().toISOString(),
-  });
-  await gh().putFile(
-    game.owner,
-    game.repo,
-    GLOSSARY_PATH,
-    JSON.stringify(list, null, 2),
-    latest ? latest.sha : undefined,
-    game.branch,
-    `Adiciona termo ao glossário — por ${RT.state.username}`
+  const result = await enqueueWrite(() =>
+    readModifyWrite(
+      game.owner,
+      game.repo,
+      GLOSSARY_PATH,
+      game.branch,
+      `Adiciona termo ao glossário — por ${RT.state.username}`,
+      (raw) => {
+        const list = raw || [];
+        list.push({
+          id: genId(),
+          original: entry.original,
+          traducao: entry.traducao,
+          contexto: entry.contexto || "",
+          criadoPor: RT.state.username,
+          atualizadoEm: new Date().toISOString(),
+        });
+        return { data: list };
+      }
+    )
   );
-  return list;
+  return result.data;
 }
 
 async function glossaryUpdate(game, id, changes) {
-  const latest = await gh().getFile(game.owner, game.repo, GLOSSARY_PATH, game.branch);
-  const list = latest ? JSON.parse(latest.text) : [];
-  const idx = list.findIndex((e) => e.id === id);
-  if (idx === -1) throw new Error("Esse termo não existe mais (pode ter sido removido por outra pessoa nesse meio tempo).");
-  list[idx] = { ...list[idx], ...changes, criadoPor: list[idx].criadoPor, atualizadoEm: new Date().toISOString() };
-  await gh().putFile(
-    game.owner,
-    game.repo,
-    GLOSSARY_PATH,
-    JSON.stringify(list, null, 2),
-    latest.sha,
-    game.branch,
-    `Edita termo do glossário — por ${RT.state.username}`
+  const result = await enqueueWrite(() =>
+    readModifyWrite(
+      game.owner,
+      game.repo,
+      GLOSSARY_PATH,
+      game.branch,
+      `Edita termo do glossário — por ${RT.state.username}`,
+      (raw) => {
+        const list = raw || [];
+        const idx = list.findIndex((e) => e.id === id);
+        if (idx === -1) return { blocked: true, info: { reason: "not-found" } };
+        list[idx] = { ...list[idx], ...changes, criadoPor: list[idx].criadoPor, atualizadoEm: new Date().toISOString() };
+        return { data: list };
+      }
+    )
   );
-  return list;
+  if (result.blocked) {
+    throw new Error("Esse termo não existe mais (pode ter sido removido por outra pessoa nesse meio tempo).");
+  }
+  return result.data;
 }
 
 async function glossaryDelete(game, id) {
-  const latest = await gh().getFile(game.owner, game.repo, GLOSSARY_PATH, game.branch);
-  const list = latest ? JSON.parse(latest.text) : [];
-  const newList = list.filter((e) => e.id !== id);
-  await gh().putFile(
-    game.owner,
-    game.repo,
-    GLOSSARY_PATH,
-    JSON.stringify(newList, null, 2),
-    latest ? latest.sha : undefined,
-    game.branch,
-    `Remove termo do glossário — por ${RT.state.username}`
+  const result = await enqueueWrite(() =>
+    readModifyWrite(
+      game.owner,
+      game.repo,
+      GLOSSARY_PATH,
+      game.branch,
+      `Remove termo do glossário — por ${RT.state.username}`,
+      (raw) => {
+        const list = raw || [];
+        const newList = list.filter((e) => e.id !== id);
+        if (newList.length === list.length) return null; // já não existia, nada a gravar
+        return { data: newList };
+      }
+    )
   );
-  return newList;
+  return result.data || [];
 }
 
 async function openGlossary(gameIdx, cameFromReview) {
@@ -1178,60 +1269,130 @@ el("btnGlossaryPanelSave").addEventListener("click", async () => {
    PRESENÇA — quem está revisando o quê agora
    ========================================================= */
 const PRESENCE_PATH = `${STARLIGHT_FOLDER}/presenca.json`;
-const PRESENCE_STALE_MS = 20 * 60 * 1000; // 20 minutos
+// 3 minutos — dá margem pra até duas batidas do sinal de vida (a cada 1min)
+// falharem antes de considerar que a pessoa sumiu de verdade.
+const PRESENCE_STALE_MS = 3 * 60 * 1000;
+const PRESENCE_HEARTBEAT_MS = 60 * 1000;
 
-async function readPresence(game) {
-  const f = await gh().getFile(game.owner, game.repo, PRESENCE_PATH, game.branch);
-  const list = f ? JSON.parse(f.text) : [];
+function aliveEntries(list) {
   const now = Date.now();
-  return { list: list.filter((p) => now - new Date(p.desde).getTime() < PRESENCE_STALE_MS), sha: f?.sha };
+  return (list || []).filter((p) => now - new Date(p.desde).getTime() < PRESENCE_STALE_MS);
 }
 
-async function writePresence(game, list, sha) {
-  await gh().putFile(
-    game.owner,
-    game.repo,
-    PRESENCE_PATH,
-    JSON.stringify(list, null, 2),
-    sha,
-    game.branch,
-    "Atualiza presença de revisão"
-  );
+/** Só pra exibir na listagem — não grava nada. */
+async function readPresence(game) {
+  try {
+    const f = await gh().getFile(game.owner, game.repo, PRESENCE_PATH, game.branch);
+    const list = f ? JSON.parse(f.text) : [];
+    return { list: aliveEntries(list) };
+  } catch (e) {
+    return { list: [] };
+  }
 }
 
 function filePathFor(gameIdx, sub, rel) {
   return `${sub.caminho}/${rel}`;
 }
 
-/** Verifica se alguém (que não seja você) já está revisando esse arquivo.
- *  Se estiver livre (ou for você mesmo reabrindo), registra sua presença
- *  e libera a entrada. Se estiver ocupado por outra pessoa, NÃO registra
- *  nada e retorna quem está com ele — quem chamou deve bloquear a entrada. */
+/** Verifica se o arquivo está livre pra entrar, e se estiver, já
+ *  registra sua presença — tudo numa única operação com reconferência:
+ *  se duas pessoas tentarem entrar ao mesmo tempo, quem perder a
+ *  corrida no GitHub relê o estado atualizado e reconfere a regra
+ *  antes de tentar de novo, em vez de escrever cegamente por cima.
+ *
+ *  Três resultados possíveis:
+ *  - blocked:false → livre, já registrada.
+ *  - blocked:true, reason:"saving" → alguém (pode ser você mesmo) está
+ *    com um commit em trânsito nesse arquivo agora.
+ *  - blocked:true, reason:"busy" → outra pessoa está revisando. */
 async function registerPresence(game, pathLabel) {
   try {
-    const { list, sha } = await readPresence(game);
-    const occupant = list.find((p) => p.arquivo === pathLabel && p.usuario !== RT.state.username);
-    if (occupant) return { blocked: true, occupant };
-
-    const others = list.filter((p) => p.arquivo !== pathLabel);
-    others.push({ arquivo: pathLabel, usuario: RT.state.username, desde: new Date().toISOString() });
-    await writePresence(game, others, sha);
+    const result = await enqueueWrite(() =>
+      readModifyWrite(game.owner, game.repo, PRESENCE_PATH, game.branch, "Registra presença de revisão", (raw) => {
+        const alive = aliveEntries(raw);
+        const existing = alive.find((p) => p.arquivo === pathLabel);
+        if (existing?.salvando) return { blocked: true, info: { reason: "saving", occupant: existing } };
+        if (existing && existing.usuario !== RT.state.username) {
+          return { blocked: true, info: { reason: "busy", occupant: existing } };
+        }
+        const others = alive.filter((p) => p.arquivo !== pathLabel);
+        others.push({ arquivo: pathLabel, usuario: RT.state.username, desde: new Date().toISOString(), salvando: false });
+        return { data: others };
+      })
+    );
+    if (result.blocked) return { blocked: true, reason: result.info.reason, occupant: result.info.occupant };
     return { blocked: false };
   } catch (e) {
     return { blocked: false }; // presença é best-effort — não impede a revisão se a checagem falhar
   }
 }
 
-async function releasePresence() {
-  if (!RT.state.file) return;
+/** Marca o arquivo como "sendo salvo" — bloqueia todo mundo, inclusive
+ *  quem está salvando, até releasePresenceFor liberar de novo. */
+async function markSaving(game, pathLabel) {
   try {
-    const { list, sha } = await readPresence(RT.state.file.game);
-    const remaining = list.filter(
-      (p) => !(p.arquivo === RT.state.file.pathLabel && p.usuario === RT.state.username)
+    await enqueueWrite(() =>
+      readModifyWrite(game.owner, game.repo, PRESENCE_PATH, game.branch, "Marca arquivo como sendo salvo", (raw) => {
+        const others = aliveEntries(raw).filter((p) => p.arquivo !== pathLabel);
+        others.push({ arquivo: pathLabel, usuario: RT.state.username, desde: new Date().toISOString(), salvando: true });
+        return { data: others };
+      })
     );
-    if (remaining.length !== list.length) await writePresence(RT.state.file.game, remaining, sha);
   } catch (e) {
     /* best-effort */
+  }
+}
+
+async function releasePresenceFor(game, pathLabel) {
+  try {
+    await enqueueWrite(() =>
+      readModifyWrite(game.owner, game.repo, PRESENCE_PATH, game.branch, "Libera presença de revisão", (raw) => {
+        const alive = aliveEntries(raw);
+        const filtered = alive.filter((p) => p.arquivo !== pathLabel);
+        if (filtered.length === (raw || []).length) return null; // nada mudou, evita commit à toa
+        return { data: filtered };
+      })
+    );
+  } catch (e) {
+    /* best-effort */
+  }
+}
+
+async function releasePresence() {
+  if (!RT.state.file) return;
+  await releasePresenceFor(RT.state.file.game, RT.state.file.pathLabel);
+}
+
+/** Sinal de vida: enquanto o arquivo estiver aberto com você, atualiza
+ *  o "desde" da sua presença a cada 1 minuto — assim o timer de 3min
+ *  só expira de verdade se você sumir (fechar a aba, cair a conexão). */
+let presenceHeartbeatTimer = null;
+
+function startPresenceHeartbeat(game, pathLabel) {
+  stopPresenceHeartbeat();
+  presenceHeartbeatTimer = setInterval(() => touchPresence(game, pathLabel), PRESENCE_HEARTBEAT_MS);
+}
+
+function stopPresenceHeartbeat() {
+  if (presenceHeartbeatTimer) {
+    clearInterval(presenceHeartbeatTimer);
+    presenceHeartbeatTimer = null;
+  }
+}
+
+async function touchPresence(game, pathLabel) {
+  try {
+    await enqueueWrite(() =>
+      readModifyWrite(game.owner, game.repo, PRESENCE_PATH, game.branch, "Sinal de vida da revisão", (raw) => {
+        const alive = aliveEntries(raw);
+        const idx = alive.findIndex((p) => p.arquivo === pathLabel && p.usuario === RT.state.username);
+        if (idx === -1) return null; // presença já não existe (expirou ou foi removida) — nada a fazer
+        alive[idx] = { ...alive[idx], desde: new Date().toISOString() };
+        return { data: alive };
+      })
+    );
+  } catch (e) {
+    /* best-effort — uma falha isolada não é motivo de alarde, tenta de novo em 1min */
   }
 }
 
@@ -1247,8 +1408,7 @@ function draftKeyFor(f) {
   return `${DRAFT_PREFIX}${f.game.owner}/${f.game.repo}/${f.game.branch}/${f.sub.caminho}/${f.rel}`;
 }
 
-function saveDraftNow() {
-  const f = RT.state.file;
+function saveDraftNow(f = RT.state.file) {
   if (!f) return;
   const changed = {};
   f.entries.forEach((e) => {
@@ -1302,12 +1462,14 @@ async function openReview(gameIdx, sub, rel) {
 
   const presenceResult = await registerPresence(game, pathLabel);
   if (presenceResult.blocked) {
-    toast(
-      `Este arquivo já está sendo revisado por ${presenceResult.occupant.usuario} agora. Tente outro arquivo ou aguarde.`,
-      "error"
-    );
+    const msg =
+      presenceResult.reason === "saving"
+        ? `Este arquivo está com um salvamento em andamento agora. Aguarde alguns segundos e tente de novo.`
+        : `Este arquivo já está sendo revisado por ${presenceResult.occupant.usuario} agora. Tente outro arquivo ou aguarde.`;
+    toast(msg, "error");
     return; // nem entra na tela de revisão
   }
+  startPresenceHeartbeat(game, pathLabel);
 
   hideAllScreens();
   el("screenReview").hidden = false;
@@ -1509,11 +1671,43 @@ el("searchBox").addEventListener("input", (e) => {
 });
 
 /* ---------- salvar com mesclagem item a item ---------- */
-async function saveReview() {
+async function startSaveReview() {
   const f = RT.state.file;
+  if (!f) return;
+
   el("btnSave").disabled = true;
   el("btnSave").textContent = "Salvando...";
+  stopPresenceHeartbeat();
 
+  try {
+    await markSaving(f.game, f.pathLabel); // trava o arquivo pra todo mundo, inclusive você
+  } catch (e) {
+    /* best-effort — mesmo se a trava falhar, segue com o salvamento */
+  }
+
+  toast("Enviando alterações pro GitHub...");
+  clearTimeout(draftTimer);
+
+  // volta pra listagem JÁ — o commit continua em segundo plano
+  await backToFileListing();
+  markFilePresenceLocally(f, { arquivo: f.pathLabel, usuario: RT.state.username, desde: new Date().toISOString(), salvando: true });
+
+  performSaveInBackground(f);
+}
+
+/** Atualiza a presença guardada em memória (RT.state.cur.presence) sem
+ *  precisar buscar de novo no GitHub — só pra a lista já refletir o
+ *  estado na hora, sem esperar um round-trip extra. */
+function markFilePresenceLocally(f, entry) {
+  const c = RT.state.cur;
+  if (!c || !c.subpasta || c.subpasta.caminho !== f.sub.caminho || !c.presence) return;
+  c.presence = c.presence.filter((p) => p.arquivo !== f.pathLabel);
+  if (entry) c.presence.push(entry);
+  if (!el("screenBrowse").hidden) renderFolderLevel();
+}
+
+async function performSaveInBackground(f) {
+  let conflicts = [];
   try {
     const [latestTranslated, latestMetaFile] = await Promise.all([
       gh().getFile(f.game.owner, f.game.repo, `Traduzidas/${f.sub.caminho}/${f.rel}`, f.game.branch),
@@ -1523,7 +1717,6 @@ async function saveReview() {
     const latestTransById = new Map(latestExtract.entries.map((e) => [e.id, e.value]));
     const latestMeta = latestMetaFile ? JSON.parse(latestMetaFile.text) : {};
 
-    const conflicts = [];
     const textEdits = new Map();
     const newMeta = { ...latestMeta };
 
@@ -1554,29 +1747,22 @@ async function saveReview() {
     });
 
     const newTranslatedText =
-      textEdits.size > 0 ? RT.parse.apply(f.sub.formato, latestExtract.data, textEdits, f.sub.campos) : latestTranslated.text;
+      textEdits.size > 0 ? RT.parse.apply(f.sub.formato, latestExtract.data, textEdits, f.sub.campos) : null;
 
-    if (textEdits.size > 0) {
-      const res = await gh().putFile(
-        f.game.owner,
-        f.game.repo,
-        `Traduzidas/${f.sub.caminho}/${f.rel}`,
-        newTranslatedText,
-        latestTranslated.sha,
-        f.game.branch,
-        `Revisão de tradução — por ${RT.state.username}`
-      );
-      f.translatedSha = res.content.sha;
+    const filesToCommit = [];
+    if (newTranslatedText !== null) {
+      filesToCommit.push({ path: `Traduzidas/${f.sub.caminho}/${f.rel}`, content: newTranslatedText });
     }
+    filesToCommit.push({ path: metaPath(f.sub, f.rel), content: JSON.stringify(newMeta, null, 2) });
 
-    await gh().putFile(
+    // texto + status viram UM commit só — ou os dois mudam juntos, ou
+    // nenhum muda, mesmo se a página fechar no meio do caminho
+    await gh().commitMultipleFiles(
       f.game.owner,
       f.game.repo,
-      metaPath(f.sub, f.rel),
-      JSON.stringify(newMeta, null, 2),
-      latestMetaFile ? latestMetaFile.sha : undefined,
       f.game.branch,
-      `Atualiza status de revisão — por ${RT.state.username}`
+      `Revisão de tradução — por ${RT.state.username}`,
+      filesToCommit
     );
 
     f.entries.forEach((e) => {
@@ -1599,22 +1785,23 @@ async function saveReview() {
     await saveProgressEntry(f.game, f.sub, f.rel, { total: f.entries.length, aprovados, porUsuario });
 
     if (conflicts.length > 0) {
-      toast(`Salvo, mas ${conflicts.length} item(ns) tiveram conflito e não foram sobrescritos — recarregue pra ver a versão de outra pessoa.`, "error");
+      toast(`"${f.rel}" salvo, mas ${conflicts.length} item(ns) tiveram conflito e não foram sobrescritos.`, "error");
+      f.dirty = true;
     } else {
-      toast("Salvo no GitHub com sucesso.");
+      toast(`"${f.rel}" salvo no GitHub com sucesso.`);
+      f.dirty = false;
     }
-    f.dirty = conflicts.length > 0;
-    el("dirtyNote").textContent = f.dirty ? "alguns itens em conflito — veja o aviso acima" : "";
-    saveDraftNow(); // limpa o rascunho (ou mantém só o que ainda ficou pendente por conflito)
+    saveDraftNow(f); // limpa o rascunho (ou mantém só o que ainda ficou pendente por conflito)
   } catch (e) {
-    toast(friendlyError(e), "error");
+    toast(`Erro ao salvar "${f.rel}": ${friendlyError(e)}`, "error");
     f.dirty = true;
   } finally {
-    el("btnSave").textContent = "Salvar no GitHub";
-    el("btnSave").disabled = !f.dirty;
+    // libera a trava — o arquivo volta a ficar disponível pra qualquer um
+    await releasePresenceFor(f.game, f.pathLabel);
+    markFilePresenceLocally(f, null);
   }
 }
-el("btnSave").addEventListener("click", saveReview);
+el("btnSave").addEventListener("click", startSaveReview);
 
 /* ---------- utilidades ---------- */
 function escapeHtml(s) {
@@ -1625,7 +1812,7 @@ function escapeAttr(s) {
 }
 
 window.addEventListener("beforeunload", (e) => {
-  if (RT.state.file?.dirty) {
+  if (RT.state.file?.dirty || pendingWriteCount > 0) {
     e.preventDefault();
     e.returnValue = "";
   }

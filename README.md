@@ -100,7 +100,12 @@ tradução"** e não pode ser aberto pra revisão.
 
 ## 7. Conflitos entre revisores
 
-Ao salvar, a ferramenta busca a versão mais recente do arquivo e do arquivo
+Ao clicar em "Salvar", a ferramenta te leva de volta pra listagem **na
+hora** — o commit continua rodando em segundo plano, e o arquivo fica
+travado (pra você também, não só pros outros) até o commit terminar de
+verdade. Um toast avisa quando o salvamento conclui (com sucesso ou erro).
+
+Nesse meio tempo, ela busca a versão mais recente do arquivo e do arquivo
 de revisão, e aplica só os itens que você mexeu **por cima** dessa versão
 mais recente — não sobrescreve o arquivo inteiro. Só dá conflito de
 verdade se duas pessoas mexeram exatamente no mesmo item pra valores
@@ -109,8 +114,10 @@ avisa quais itens precisam ser refeitos.
 
 Além disso, ao abrir um arquivo a ferramenta registra sua presença num
 arquivo compartilhado (`presenca.json`) e avisa se outra pessoa já estiver
-revisando o mesmo arquivo. Essa marca expira sozinha depois de 20 minutos
-(pra cobrir o caso de alguém fechar a aba sem clicar em "voltar").
+revisando o mesmo arquivo. Enquanto você estiver com ele aberto, ela manda
+um "sinal de vida" a cada 1 minuto pra renovar essa marca — ela só expira
+de verdade (depois de 3 minutos sem sinal) se você fechar a aba ou cair a
+conexão, cobrindo esse caso sem deixar o arquivo travado por muito tempo.
 
 ## 8. Rascunho automático (proteção contra refresh)
 
@@ -124,7 +131,45 @@ O rascunho é apagado automaticamente quando você salva com sucesso, ou
 quando você escolhe "Sair mesmo assim" ao tentar voltar com alterações
 pendentes (nesse caso a intenção já é descartar).
 
-## 9. Progresso automático e presença bloqueante
+## 9. Proteção contra concorrência (fila, retry e commit atômico)
+
+Como vários revisores mexem nos mesmos arquivos compartilhados
+(`presenca.json`, `progresso.json`, `glossario.json`, `repos.json`) ao
+mesmo tempo, a ferramenta tem algumas camadas de proteção:
+
+- **Fila de escrita**: dentro do seu próprio navegador, toda gravação
+  passa por uma fila — nunca duas ao mesmo tempo, mesmo se você disparar
+  ações rapidinho uma atrás da outra (abrir um arquivo logo após salvar
+  outro, por exemplo). Um indicador "sincronizando..." aparece no topo da
+  página sempre que tem algo pendente nessa fila.
+- **Atraso + nova tentativa entre pessoas diferentes**: antes de gravar,
+  a ferramenta espera um atrasinho aleatório (curto, imperceptível) —
+  isso reduz a chance de duas pessoas em navegadores diferentes caírem no
+  mesmíssimo instante. Se mesmo assim colidir (o GitHub recusa porque
+  alguém gravou primeiro), ela busca a versão mais nova e tenta de novo
+  automaticamente, várias vezes se precisar — sem perder o que ninguém
+  fez.
+- **Reconferência em disputas de verdade** (como duas pessoas tentando
+  abrir o mesmo arquivo ao mesmo tempo): em vez de só tentar gravar de
+  novo cegamente, a ferramenta relê a regra a cada tentativa — só quem
+  realmente "ganhou a corrida" no GitHub fica dono do arquivo, o outro
+  descobre isso na hora, sem sobrescrever ninguém.
+- **Sinal de vida da presença**: enquanto você está com um arquivo aberto,
+  a ferramenta atualiza sua presença sozinha a cada 1 minuto. A trava
+  expira em 3 minutos — dá margem pra até duas atualizações falharem
+  (rede lenta, por exemplo) antes de considerar que você sumiu de
+  verdade. Se você realmente fechar a aba ou perder a conexão, o arquivo
+  se libera sozinho depois desses 3 minutos.
+- **Commit atômico**: ao salvar uma revisão, o texto traduzido e o status
+  (`.revisao`) são gravados **num commit só**, usando a API de baixo nível
+  do Git — ou os dois mudam juntos, ou nenhum muda. Isso evita ficar um
+  "meio-termo" (texto atualizado mas status não) se a página fechar bem
+  no meio do salvamento.
+- **Aviso de fechar a aba**: o navegador avisa antes de fechar/recarregar
+  sempre que tiver qualquer coisa pendente na fila (não só a revisão
+  atual) — abrir arquivo, salvar, progresso, glossário, o que for.
+
+## 10. Progresso automático e presença bloqueante
 
 Os % de **Tradução** e **Revisão** aparecem sozinhos nos cards de jogo,
 subpasta e arquivo — não precisa mais clicar em nenhum botão:
@@ -156,7 +201,7 @@ progresso funcionam pra qualquer revisor, sem depender de nenhuma
 permissão extra no repositório da ferramenta (que a maioria dos revisores
 nem tem).
 
-## 10. Filtro de acesso por jogo
+## 11. Filtro de acesso por jogo
 
 Ao entrar, a ferramenta verifica em qual repositório de jogo você tem
 permissão de verdade (checando direto com o GitHub) e só mostra na lista
@@ -169,7 +214,7 @@ vendo todos os jogos na tela de Configurações, mesmo sem acesso pessoal ao
 repositório de tradução deles, já que ali o que importa é gerenciar o
 cadastro, não revisar.
 
-## 11. Glossário
+## 12. Glossário
 
 Cada jogo tem seu próprio glossário — uma tabela de termos com **original**,
 **tradução** e uma **observação/contexto** opcional, pra manter consistência
