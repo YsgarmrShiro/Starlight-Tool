@@ -788,7 +788,7 @@ async function saveProgressEntry(game, sub, rel, stats) {
     );
     if (result.data) RT.state.progressData[gameKey(game)] = result.data;
   } catch (e) {
-    /* best-effort — não impede o salvamento da revisão em si */
+    console.error("[StarlightTool] Falha ao gravar cache de progresso:", e); // não impede o salvamento da revisão em si
   }
 }
 
@@ -1323,6 +1323,7 @@ async function registerPresence(game, pathLabel) {
     if (result.blocked) return { blocked: true, reason: result.info.reason, occupant: result.info.occupant };
     return { blocked: false };
   } catch (e) {
+    console.error("[StarlightTool] Falha ao registrar presença:", e);
     return { blocked: false }; // presença é best-effort — não impede a revisão se a checagem falhar
   }
 }
@@ -1339,7 +1340,7 @@ async function markSaving(game, pathLabel) {
       })
     );
   } catch (e) {
-    /* best-effort */
+    console.error("[StarlightTool] Falha ao marcar arquivo como salvando:", e);
   }
 }
 
@@ -1354,7 +1355,7 @@ async function releasePresenceFor(game, pathLabel) {
       })
     );
   } catch (e) {
-    /* best-effort */
+    console.error("[StarlightTool] Falha ao liberar presença:", e);
   }
 }
 
@@ -1392,7 +1393,7 @@ async function touchPresence(game, pathLabel) {
       })
     );
   } catch (e) {
-    /* best-effort — uma falha isolada não é motivo de alarde, tenta de novo em 1min */
+    console.error("[StarlightTool] Falha no sinal de vida da presença:", e); // uma falha isolada não é motivo de alarde, tenta de novo em 1min
   }
 }
 
