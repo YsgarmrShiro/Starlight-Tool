@@ -116,17 +116,130 @@ RT.parse = (() => {
     return new XMLSerializer().serializeToString(doc);
   }
 
+  /* ---------------- TXT (chave: valor / chave=valor, uma por linha) ---------------- */
+  function scanTXTFields(text, fields) {
+    const entries = [];
+    fields.forEach((key) => {
+      const re = new RegExp(`^([ \\t]*${escapeRegExp(key)}[ \\t]*[:=][ \\t]*)(.*)$`, "gm");
+      let m;
+      let i = 0;
+      while ((m = re.exec(text)) !== null) {
+        const prefix = m[1];
+        const value = m[2].replace(/\r$/, "");
+        const start = m.index + prefix.length;
+        const end = start + value.length;
+        const id = `${key}#${i}`;
+        i++; // sempre incrementa, mesmo se pular — mantém o índice alinhado
+        if (value.trim() === "") continue;
+        entries.push({ id, value, start, end });
+      }
+    });
+    entries.sort((a, b) => a.start - b.start);
+    return entries;
+  }
+
+  function extractTXT(text, fields) {
+    return { data: text, entries: scanTXTFields(text, fields) };
+  }
+
+  function applyTXT(text, edits, fieldsArr) {
+    const entries = scanTXTFields(text, new Set(fieldsArr));
+    const targets = entries.filter((e) => edits.has(e.id)).sort((a, b) => b.start - a.start);
+    let result = text;
+    targets.forEach((e) => {
+      result = result.slice(0, e.start) + edits.get(e.id) + result.slice(e.end);
+    });
+    return result;
+  }
+
+  /* ---------------- CSV (colunas identificadas por número, começando em 0) ---------------- */
+  function encodeCSVField(value) {
+    if (/[",\n\r]/.test(value)) return '"' + value.replace(/"/g, '""') + '"';
+    return value;
+  }
+
+  function scanCSVFields(text, fieldIndices) {
+    const wanted = new Set(Array.from(fieldIndices).map(String));
+    const entries = [];
+    let i = 0;
+    let row = 0;
+    const n = text.length;
+    while (i < n) {
+      let col = 0;
+      let fieldStart = i;
+      let cur = "";
+      let inQuotes = false;
+      while (i < n) {
+        const c = text[i];
+        if (inQuotes) {
+          if (c === '"') {
+            if (text[i + 1] === '"') {
+              cur += '"';
+              i += 2;
+              continue;
+            }
+            inQuotes = false;
+            i++;
+            continue;
+          }
+          cur += c;
+          i++;
+          continue;
+        }
+        if (c === '"' && cur === "") {
+          inQuotes = true;
+          i++;
+          continue;
+        }
+        if (c === ",") {
+          if (wanted.has(String(col))) entries.push({ id: `${col}#${row}`, value: cur, start: fieldStart, end: i });
+          col++;
+          i++;
+          fieldStart = i;
+          cur = "";
+          continue;
+        }
+        if (c === "\n" || c === "\r") break;
+        cur += c;
+        i++;
+      }
+      if (wanted.has(String(col))) entries.push({ id: `${col}#${row}`, value: cur, start: fieldStart, end: i });
+      if (text[i] === "\r") i++;
+      if (text[i] === "\n") i++;
+      row++;
+    }
+    return entries.filter((e) => e.value.trim() !== "");
+  }
+
+  function extractCSV(text, fields) {
+    return { data: text, entries: scanCSVFields(text, fields) };
+  }
+
+  function applyCSV(text, edits, fieldsArr) {
+    const entries = scanCSVFields(text, new Set(fieldsArr));
+    const targets = entries.filter((e) => edits.has(e.id)).sort((a, b) => b.start - a.start);
+    let result = text;
+    targets.forEach((e) => {
+      result = result.slice(0, e.start) + encodeCSVField(edits.get(e.id)) + result.slice(e.end);
+    });
+    return result;
+  }
+
   /* ---------------- despachante por formato ---------------- */
   function extract(format, text, fieldsArr) {
     const fields = new Set(fieldsArr);
     if (format === "json") return extractJSON(text, fields);
     if (format === "xml") return extractXML(text, fields);
+    if (format === "txt") return extractTXT(text, fields);
+    if (format === "csv") return extractCSV(text, fields);
     throw new Error("Formato não suportado: " + format);
   }
 
   function apply(format, data, edits, fieldsArr) {
     if (format === "json") return applyJSON(data, edits, fieldsArr);
     if (format === "xml") return applyXML(data, edits);
+    if (format === "txt") return applyTXT(data, edits, fieldsArr);
+    if (format === "csv") return applyCSV(data, edits, fieldsArr);
     throw new Error("Formato não suportado: " + format);
   }
 

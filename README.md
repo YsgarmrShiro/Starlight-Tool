@@ -60,13 +60,26 @@ repositório da ferramenta), cada jogo tem:
 - **Nome**, **owner/repo/branch** do repositório de tradução dele.
 - Uma ou mais **subpastas**, cada uma com:
   - **Caminho**: nome da subpasta dentro de `Originais/`/`Traduzidas/`.
-  - **Formato**: `json` ou `xml`.
-  - **Campos**: nomes das chaves (json) ou tags/atributos (xml) que
-    contêm o texto a revisar — ex: `text, msg_string` ou `Text`.
+  - **Formato**: `json`, `xml`, `txt` ou `csv`.
+  - **Campos**: o que isso significa muda por formato —
+    - `json`: nomes das chaves que contêm o texto (ex: `text, msg_string`).
+    - `xml`: nomes das tags ou atributos (ex: `Text`).
+    - `txt`: nomes das chaves em linhas no formato `chave: valor` ou
+      `chave=valor` (ex: `msg_001, msg_002`).
+    - `csv`: **números das colunas**, começando em 0 (ex: `0, 2` pra
+      pegar a primeira e a terceira coluna). CSV não tem nome de campo,
+      só posição.
 
 A ferramenta varre o arquivo original e o traduzido em paralelo (eles
 precisam ter a mesma estrutura) e casa um trecho de texto do original com o
-correspondente no traduzido.
+correspondente no traduzido. Pra `.csv`, isso significa que as linhas
+precisam estar na mesma ordem nos dois arquivos (linha N do original casa
+com linha N do traduzido).
+
+⚠️ Se o `.csv` tiver uma linha de cabeçalho (nomes das colunas), ela
+também aparece como um item revisável — a ferramenta não distingue
+cabeçalho de dado. Não atrapalha nada, só sobra um item a mais pra
+ignorar/marcar como não aplicável.
 
 ## 4. O repositório de tradução precisa ser público?
 
