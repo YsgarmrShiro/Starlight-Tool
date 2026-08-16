@@ -370,6 +370,8 @@ function showBrowse() {
   el("btnScanProgress").hidden = true;
   el("scanStatus").hidden = true;
   el("btnOpenGlossary").hidden = true;
+  el("btnMarkFolderReviewed").hidden = true;
+  el("btnUnmarkFolderReviewed").hidden = true;
   renderGamesBrowse();
 }
 
@@ -550,6 +552,8 @@ function renderSubpastasBrowse(gameIdx) {
   el("btnScanProgress").hidden = true;
   el("scanStatus").hidden = true;
   el("btnOpenGlossary").hidden = false;
+  el("btnMarkFolderReviewed").hidden = true;
+  el("btnUnmarkFolderReviewed").hidden = true;
   const game = RT.state.games[gameIdx];
   const box = el("browseList");
   box.innerHTML = "";
@@ -612,6 +616,8 @@ async function openSubpasta(gameIdx, sub) {
       el("btnScanProgress").hidden = false;
       el("scanStatus").hidden = false;
       el("scanStatus").textContent = `${scanned}/${translatedCount} arq. no cache`;
+      el("btnMarkFolderReviewed").hidden = false;
+      el("btnUnmarkFolderReviewed").hidden = false;
     }
     renderFolderLevel();
   } catch (e) {
@@ -754,6 +760,109 @@ function progressBarHtml({ approved, total }) {
   const pct = total ? Math.round((approved / total) * 100) : 0;
   return `<div class="progress__bar progress__bar--inline"><div class="progress__fill" style="width:${pct}%"></div></div><span class="progress__text">${approved}/${total} (${pct}%)</span>`;
 }
+
+/* ---------- marcar/desmarcar pasta inteira como revisada (em massa) ---------- */
+async function bulkSetFolderReviewed(marking) {
+  const c = RT.state.cur;
+  if (!c || !c.subpasta || !c.rows) return;
+  const game = RT.state.games[c.gameIdx];
+  const sub = c.subpasta;
+  const prefix = c.folderPath.length ? c.folderPath.join("/") + "/" : "";
+  const targets = c.rows.filter((r) => r.hasTranslation && r.rel.startsWith(prefix));
+
+  if (targets.length === 0) {
+    toast("Nenhum arquivo traduzido nessa pasta.", "error");
+    return;
+  }
+
+  const label = prefix || sub.caminho;
+  const explicacao = marking
+    ? "Isso só afeta itens ainda não aprovados — revisões já feitas item por item por alguém não são mexidas, e não fica associado a nenhum revisor."
+    : "Isso só desfaz o que foi marcado em massa (sem revisor associado) — revisões feitas item por item continuam intactas.";
+  const ok = await confirmDialog(
+    `${marking ? "Marcar" : "Desmarcar"} ${targets.length} arquivo(s) dentro de "${label}" como revisado(s)? ${explicacao}`
+  );
+  if (!ok) return;
+
+  if (targets.length > 150) {
+    const ok2 = await confirmDialog(`São ${targets.length} arquivos — isso pode demorar bastante. Continuar mesmo assim?`);
+    if (!ok2) return;
+  }
+
+  const btn = marking ? el("btnMarkFolderReviewed") : el("btnUnmarkFolderReviewed");
+  btn.disabled = true;
+  const originalText = btn.textContent;
+  let updated = 0;
+  let skipped = 0;
+
+  for (let i = 0; i < targets.length; i++) {
+    const r = targets[i];
+    btn.textContent = `${i + 1}/${targets.length}...`;
+    const pathLabel = filePathFor(c.gameIdx, sub, r.rel);
+    const busy = c.presence.find((p) => p.arquivo === pathLabel);
+    if (busy) {
+      skipped++;
+      continue;
+    }
+    try {
+      const translated = await gh().getFile(game.owner, game.repo, `Traduzidas/${sub.caminho}/${r.rel}`, game.branch);
+      if (!translated) continue;
+      const { entries } = RT.parse.extract(sub.formato, translated.text, sub.campos);
+      if (entries.length === 0) continue;
+
+      const result = await enqueueWrite(() =>
+        readModifyWrite(
+          game.owner,
+          game.repo,
+          metaPath(sub, r.rel),
+          game.branch,
+          `${marking ? "Marca" : "Desmarca"} revisão em massa (${label}) — por ${RT.state.username}`,
+          (raw) => {
+            const meta = raw || {};
+            let changed = false;
+            entries.forEach((e) => {
+              const existing = meta[e.id];
+              if (marking) {
+                if (existing?.status === "approved") return; // já aprovado por alguém — não mexe
+                meta[e.id] = { status: "approved", comment: existing?.comment || "", reviewer: "" };
+                changed = true;
+              } else {
+                if (!(existing?.status === "approved" && !existing?.reviewer)) return; // só desfaz o que foi marcado em massa
+                meta[e.id] = { status: "pending", comment: existing?.comment || "", reviewer: "" };
+                changed = true;
+              }
+            });
+            return changed ? { data: meta } : null;
+          }
+        )
+      );
+
+      if (result.data) {
+        let aprovados = 0;
+        const porUsuario = {};
+        entries.forEach((e) => {
+          const m = result.data[e.id];
+          if (m?.status === "approved") {
+            aprovados++;
+            if (m.reviewer) porUsuario[m.reviewer] = (porUsuario[m.reviewer] || 0) + 1;
+          }
+        });
+        await saveProgressEntry(game, sub, r.rel, { total: entries.length, aprovados, porUsuario });
+        updated++;
+      }
+    } catch (e) {
+      console.error(`[StarlightTool] Falha ao ${marking ? "marcar" : "desmarcar"} "${r.rel}" em massa:`, e);
+    }
+  }
+
+  btn.disabled = false;
+  btn.textContent = originalText;
+  toast(`${updated} arquivo(s) atualizado(s).${skipped ? ` ${skipped} pulado(s) por estarem em revisão agora.` : ""}`);
+  renderFolderLevel();
+}
+
+el("btnMarkFolderReviewed").addEventListener("click", () => bulkSetFolderReviewed(true));
+el("btnUnmarkFolderReviewed").addEventListener("click", () => bulkSetFolderReviewed(false));
 
 /* =========================================================
    PROGRESSO — reformulado.

@@ -235,6 +235,34 @@ pra adicionar um termo novo sem sair de onde você está revisando. Ele fica
 fim desse painel tem um link "Ver glossário completo" que leva pra tabela
 inteira, se precisar editar ou remover algo.
 
+## 13. Marcar/desmarcar pasta inteira como revisada (admin)
+
+Pra facilitar quando uma tradução já está encaminhada/pronta e só falta
+"bater o carimbo", quem é **admin** tem dois botões ao navegar dentro de
+uma subpasta: **"✓ Marcar pasta como revisada"** e **"✕ Desmarcar pasta"**.
+Eles agem sobre todos os arquivos traduzidos dentro da pasta que você está
+vendo no momento (incluindo subpastas aninhadas dentro dela).
+
+Duas regras importantes pra não atropelar revisão de verdade:
+
+- **Marcar** só afeta itens que **ainda não estão aprovados** — um item já
+  aprovado por alguém, item por item, nunca é sobrescrito. Itens marcados
+  em massa não ficam com nome de revisor associado (por isso não entram
+  na % por pessoa).
+- **Desmarcar** só reverte itens que foram **marcados em massa**
+  (reconhecidos justamente por não terem revisor associado) — revisões
+  feitas de verdade, item por item, continuam intactas.
+
+Arquivos que alguém está revisando naquele momento são pulados
+automaticamente (pra não brigar com quem está trabalhando neles), e a
+ferramenta avisa no final quantos foram atualizados e quantos foram
+pulados.
+
+## 14. Ícone da página
+
+O mesmo `img/icon.jpg` usado no topo também aparece como favicon (o
+iconezinho da aba do navegador).
+
 ## Limitações conhecidas desta primeira versão (pra ajustar depois)
 
 - O progresso (%) não é calculado automaticamente ao navegar — tem um botão
