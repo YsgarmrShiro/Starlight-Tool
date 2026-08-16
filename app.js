@@ -1469,6 +1469,7 @@ async function openReview(gameIdx, sub, rel) {
         ? `Este arquivo está com um salvamento em andamento agora. Aguarde alguns segundos e tente de novo.`
         : `Este arquivo já está sendo revisado por ${presenceResult.occupant.usuario} agora. Tente outro arquivo ou aguarde.`;
     toast(msg, "error");
+    markFilePresenceLocally(sub, pathLabel, presenceResult.occupant); // atualiza a listagem na hora, sem precisar navegar de novo
     return; // nem entra na tela de revisão
   }
   startPresenceHeartbeat(game, pathLabel);
@@ -1692,7 +1693,7 @@ async function startSaveReview() {
 
   // volta pra listagem JÁ — o commit continua em segundo plano
   await backToFileListing();
-  markFilePresenceLocally(f, { arquivo: f.pathLabel, usuario: RT.state.username, desde: new Date().toISOString(), salvando: true });
+  markFilePresenceLocally(f.sub, f.pathLabel, { arquivo: f.pathLabel, usuario: RT.state.username, desde: new Date().toISOString(), salvando: true });
 
   performSaveInBackground(f);
 }
@@ -1700,10 +1701,10 @@ async function startSaveReview() {
 /** Atualiza a presença guardada em memória (RT.state.cur.presence) sem
  *  precisar buscar de novo no GitHub — só pra a lista já refletir o
  *  estado na hora, sem esperar um round-trip extra. */
-function markFilePresenceLocally(f, entry) {
+function markFilePresenceLocally(sub, pathLabel, entry) {
   const c = RT.state.cur;
-  if (!c || !c.subpasta || c.subpasta.caminho !== f.sub.caminho || !c.presence) return;
-  c.presence = c.presence.filter((p) => p.arquivo !== f.pathLabel);
+  if (!c || !c.subpasta || c.subpasta.caminho !== sub.caminho || !c.presence) return;
+  c.presence = c.presence.filter((p) => p.arquivo !== pathLabel);
   if (entry) c.presence.push(entry);
   if (!el("screenBrowse").hidden) renderFolderLevel();
 }
@@ -1800,7 +1801,7 @@ async function performSaveInBackground(f) {
   } finally {
     // libera a trava — o arquivo volta a ficar disponível pra qualquer um
     await releasePresenceFor(f.game, f.pathLabel);
-    markFilePresenceLocally(f, null);
+    markFilePresenceLocally(f.sub, f.pathLabel, null);
   }
 }
 el("btnSave").addEventListener("click", startSaveReview);
