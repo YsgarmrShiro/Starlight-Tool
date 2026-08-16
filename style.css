@@ -176,6 +176,14 @@ code{ background:var(--panel-alt); padding:1px 6px; border-radius:5px; font-fami
 .browse-card__sub{ font-size:12px; color:var(--text-faint); }
 .browse-card__arrow{ color:var(--text-faint); font-size:18px; flex-shrink:0; }
 .browse-card__progress{ display:flex; align-items:center; gap:8px; min-width:150px; justify-content:flex-end; flex-shrink:0; }
+.browse-card__actions{ display:flex; gap:4px; flex-shrink:0; }
+.mini-btn{
+  width:24px; height:24px; display:flex; align-items:center; justify-content:center;
+  border:1px solid var(--border); background:var(--panel-alt); color:var(--text-dim);
+  border-radius:6px; font-size:12px; cursor:pointer; padding:0; line-height:1;
+}
+.mini-btn:hover{ border-color:var(--border-strong); color:var(--text); }
+.mini-btn:disabled{ opacity:.5; cursor:not-allowed; }
 .calc-loading{ font-size:12px; color:var(--text-faint); }
 .scan-status{ font-size:12px; color:var(--text-faint); white-space:nowrap; }
 .progress__bar--inline{ width:64px; }

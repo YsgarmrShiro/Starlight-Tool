@@ -370,8 +370,6 @@ function showBrowse() {
   el("btnScanProgress").hidden = true;
   el("scanStatus").hidden = true;
   el("btnOpenGlossary").hidden = true;
-  el("btnMarkFolderReviewed").hidden = true;
-  el("btnUnmarkFolderReviewed").hidden = true;
   renderGamesBrowse();
 }
 
@@ -488,7 +486,7 @@ function renderCrumbs() {
   );
 }
 
-function makeCard({ title, subtitle, badgeHtml = "", progressHtml = "", disabled = false, onClick }) {
+function makeCard({ title, subtitle, badgeHtml = "", progressHtml = "", disabled = false, onClick, actions = [] }) {
   const card = document.createElement("div");
   card.className = "browse-card" + (disabled ? " browse-card--disabled" : "");
   card.innerHTML = `
@@ -497,11 +495,27 @@ function makeCard({ title, subtitle, badgeHtml = "", progressHtml = "", disabled
       ${subtitle ? `<span class="browse-card__sub">${subtitle}</span>` : ""}
     </div>
     <div class="browse-card__progress">${badgeHtml}${progressHtml}</div>
+    ${
+      actions.length
+        ? `<div class="browse-card__actions">${actions
+            .map((a, i) => `<button class="mini-btn" data-action-idx="${i}" title="${escapeAttr(a.title)}">${a.label}</button>`)
+            .join("")}</div>`
+        : ""
+    }
     ${disabled ? "" : `<span class="browse-card__arrow">›</span>`}
   `;
   if (!disabled && onClick) {
-    card.addEventListener("click", () => onClick());
+    card.addEventListener("click", (ev) => {
+      if (ev.target.closest(".mini-btn")) return;
+      onClick();
+    });
   }
+  actions.forEach((a, i) => {
+    card.querySelector(`[data-action-idx="${i}"]`).addEventListener("click", (ev) => {
+      ev.stopPropagation();
+      a.onClick(ev.target);
+    });
+  });
   return card;
 }
 
@@ -552,8 +566,6 @@ function renderSubpastasBrowse(gameIdx) {
   el("btnScanProgress").hidden = true;
   el("scanStatus").hidden = true;
   el("btnOpenGlossary").hidden = false;
-  el("btnMarkFolderReviewed").hidden = true;
-  el("btnUnmarkFolderReviewed").hidden = true;
   const game = RT.state.games[gameIdx];
   const box = el("browseList");
   box.innerHTML = "";
@@ -616,8 +628,6 @@ async function openSubpasta(gameIdx, sub) {
       el("btnScanProgress").hidden = false;
       el("scanStatus").hidden = false;
       el("scanStatus").textContent = `${scanned}/${translatedCount} arq. no cache`;
-      el("btnMarkFolderReviewed").hidden = false;
-      el("btnUnmarkFolderReviewed").hidden = false;
     }
     renderFolderLevel();
   } catch (e) {
@@ -664,11 +674,27 @@ function renderFolderLevel() {
     .forEach(([name, info]) => {
       const folderPrefix = prefix + name + "/";
       const rev = reviewStatsForFolderPrefix(game, c.subpasta, folderPrefix);
+      const actions =
+        RT.state.role === "admin"
+          ? [
+              {
+                label: "✓",
+                title: `Marcar tudo dentro de "${name}" como revisado`,
+                onClick: (btnEl) => bulkSetFolderReviewed(true, folderPrefix, name, btnEl),
+              },
+              {
+                label: "✕",
+                title: `Desmarcar dentro de "${name}" (só o que foi marcado em massa)`,
+                onClick: (btnEl) => bulkSetFolderReviewed(false, folderPrefix, name, btnEl),
+              },
+            ]
+          : [];
       box.appendChild(
         makeCard({
           title: "📁 " + escapeHtml(name),
           subtitle: `${info.total} arquivo(s) · ${info.traduzidos} traduzido(s)`,
           progressHtml: pctChip("Revisão", rev.aprovados, rev.total),
+          actions,
           onClick: () => {
             c.folderPath.push(name);
             renderCrumbs();
@@ -762,12 +788,11 @@ function progressBarHtml({ approved, total }) {
 }
 
 /* ---------- marcar/desmarcar pasta inteira como revisada (em massa) ---------- */
-async function bulkSetFolderReviewed(marking) {
+async function bulkSetFolderReviewed(marking, prefix, label, triggerBtn) {
   const c = RT.state.cur;
   if (!c || !c.subpasta || !c.rows) return;
   const game = RT.state.games[c.gameIdx];
   const sub = c.subpasta;
-  const prefix = c.folderPath.length ? c.folderPath.join("/") + "/" : "";
   const targets = c.rows.filter((r) => r.hasTranslation && r.rel.startsWith(prefix));
 
   if (targets.length === 0) {
@@ -775,7 +800,6 @@ async function bulkSetFolderReviewed(marking) {
     return;
   }
 
-  const label = prefix || sub.caminho;
   const explicacao = marking
     ? "Isso só afeta itens ainda não aprovados — revisões já feitas item por item por alguém não são mexidas, e não fica associado a nenhum revisor."
     : "Isso só desfaz o que foi marcado em massa (sem revisor associado) — revisões feitas item por item continuam intactas.";
@@ -789,15 +813,13 @@ async function bulkSetFolderReviewed(marking) {
     if (!ok2) return;
   }
 
-  const btn = marking ? el("btnMarkFolderReviewed") : el("btnUnmarkFolderReviewed");
-  btn.disabled = true;
-  const originalText = btn.textContent;
+  if (triggerBtn) triggerBtn.disabled = true;
   let updated = 0;
   let skipped = 0;
 
   for (let i = 0; i < targets.length; i++) {
     const r = targets[i];
-    btn.textContent = `${i + 1}/${targets.length}...`;
+    if (triggerBtn) triggerBtn.textContent = `${i + 1}/${targets.length}`;
     const pathLabel = filePathFor(c.gameIdx, sub, r.rel);
     const busy = c.presence.find((p) => p.arquivo === pathLabel);
     if (busy) {
@@ -855,14 +877,9 @@ async function bulkSetFolderReviewed(marking) {
     }
   }
 
-  btn.disabled = false;
-  btn.textContent = originalText;
   toast(`${updated} arquivo(s) atualizado(s).${skipped ? ` ${skipped} pulado(s) por estarem em revisão agora.` : ""}`);
-  renderFolderLevel();
+  renderFolderLevel(); // reconstrói os cards do zero, já refletindo os novos números
 }
-
-el("btnMarkFolderReviewed").addEventListener("click", () => bulkSetFolderReviewed(true));
-el("btnUnmarkFolderReviewed").addEventListener("click", () => bulkSetFolderReviewed(false));
 
 /* =========================================================
    PROGRESSO — reformulado.
