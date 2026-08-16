@@ -153,7 +153,25 @@ code{ background:var(--panel-alt); padding:1px 6px; border-radius:5px; font-fami
 .game-form__actions{ display:flex; gap:8px; margin-top:6px; }
 
 /* ===== BROWSE SCREEN ===== */
-.browse{ max-width:860px; margin:0 auto; padding:32px 20px 80px; }
+.browse{ max-width:1120px; margin:0 auto; padding:32px 20px 80px; }
+.browse__body{ display:flex; gap:24px; align-items:flex-start; }
+.browse__body .browse-list{ flex:1; min-width:0; }
+
+.game-status-panel{
+  width:280px; flex-shrink:0; background:var(--panel-solid); border:1px solid var(--border);
+  border-radius:var(--radius); padding:20px; display:flex; flex-direction:column; gap:18px;
+  position:sticky; top:100px;
+}
+.game-status-panel__stats{ display:flex; flex-direction:column; gap:12px; }
+.game-status-stat{ display:flex; flex-direction:column; gap:4px; }
+.game-status-stat__label{ font-size:12px; color:var(--text-dim); }
+.game-status-stat__value{ font-family:var(--display); font-size:15px; font-weight:600; }
+.game-status-stat__value small{ font-family:var(--sans); font-size:11px; font-weight:500; color:var(--text-faint); }
+
+@media (max-width: 900px){
+  .browse__body{ flex-direction:column; }
+  .game-status-panel{ width:100%; position:static; }
+}
 .browse__header{ display:flex; align-items:center; gap:14px; margin-bottom:22px; min-height:32px; }
 .browse__header .crumbs{ flex:1; }
 .crumbs{ font-size:13px; color:var(--text-dim); }

@@ -267,6 +267,24 @@ do repositório não fica poluído com um commit por arquivo.
 O mesmo `img/icon.jpg` usado no topo também aparece como favicon (o
 iconezinho da aba do navegador).
 
+## 15. Painel de status do jogo
+
+Ao entrar num jogo (antes de escolher uma subpasta), aparece um painel na
+lateral direita com:
+
+- **Linhas revisadas**: aprovados / total, vindo do mesmo cache de
+  progresso de sempre.
+- **Linhas traduzidas**: quantas linhas estão dentro de arquivos que já
+  têm versão traduzida (não compara texto com o original — só verifica
+  se o arquivo existe, é mais rápido). Quando nem todos os arquivos do
+  jogo já foram abertos/escaneados, esse número vem com **"~"** na
+  frente — é uma estimativa, calculada a partir da média de linhas por
+  arquivo já conhecida, multiplicada pelo total de arquivos. Depois de
+  rodar o "Escanear progresso completo" em tudo, o "~" some e o número
+  fica exato.
+- **% revisado por pessoa** (o mesmo painel que já existia, só que agora
+  fica aqui do lado em vez de em cima da lista de subpastas).
+
 ## Limitações conhecidas desta primeira versão (pra ajustar depois)
 
 - O progresso (%) não é calculado automaticamente ao navegar — tem um botão

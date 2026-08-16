@@ -370,6 +370,7 @@ function showBrowse() {
   el("btnScanProgress").hidden = true;
   el("scanStatus").hidden = true;
   el("btnOpenGlossary").hidden = true;
+  el("gameStatusPanel").hidden = true;
   renderGamesBrowse();
 }
 
@@ -570,25 +571,10 @@ function renderSubpastasBrowse(gameIdx) {
   const box = el("browseList");
   box.innerHTML = "";
 
-  const { porUsuario, total } = userBreakdownForGame(game);
-  const userNames = Object.keys(porUsuario).sort((a, b) => porUsuario[b] - porUsuario[a]);
-  if (userNames.length > 0) {
-    const panel = document.createElement("div");
-    panel.className = "user-breakdown";
-    panel.innerHTML =
-      `<span class="sidebar__label">% revisado por pessoa</span><div class="user-breakdown__list">` +
-      userNames
-        .map((u) => {
-          const pct = total ? Math.round((porUsuario[u] / total) * 100) : 0;
-          return `<span class="pct-chip pct-chip--user">${escapeHtml(u)} ${pct}%</span>`;
-        })
-        .join("") +
-      `</div>`;
-    box.appendChild(panel);
-  }
+  renderGameStatusPanel(game);
 
   if (!game.subpastas || game.subpastas.length === 0) {
-    box.innerHTML += `<p class="empty-state">Esse jogo não tem subpastas cadastradas.</p>`;
+    box.innerHTML = `<p class="empty-state">Esse jogo não tem subpastas cadastradas.</p>`;
     return;
   }
   game.subpastas.forEach((sub) => {
@@ -611,10 +597,65 @@ function renderSubpastasBrowse(gameIdx) {
   });
 }
 
+/** Painel da direita: contagem de linhas (revisadas e traduzidas) e %
+ *  por pessoa. A contagem de "traduzidas" é estimada quando nem todos os
+ *  arquivos ainda foram abertos/escaneados — usa a média de linhas por
+ *  arquivo já conhecida, multiplicada pelo total de arquivos (rápido,
+ *  não precisa ler tudo, mas fica com "~" na frente quando é estimativa). */
+function renderGameStatusPanel(game) {
+  const panel = el("gameStatusPanel");
+  panel.hidden = false;
+
+  const rev = reviewStatsForGame(game);
+  const arquivosNoCache = countCacheFiles(game, "");
+  const avgPorArquivo = arquivosNoCache > 0 ? rev.total / arquivosNoCache : 0;
+
+  el("gameStatusStats").innerHTML = `
+    <div class="game-status-stat">
+      <span class="game-status-stat__label">Linhas revisadas</span>
+      <span class="game-status-stat__value">${rev.aprovados} / ${rev.total} <small>(${rev.total ? Math.round((rev.aprovados / rev.total) * 100) : 0}%)</small></span>
+    </div>
+    <div class="game-status-stat">
+      <span class="game-status-stat__label">Linhas traduzidas</span>
+      <span class="game-status-stat__value" id="gameStatusLinhasTraduzidas"><span class="calc-loading">calculando...</span></span>
+    </div>
+  `;
+
+  const { porUsuario, total } = userBreakdownForGame(game);
+  const userNames = Object.keys(porUsuario).sort((a, b) => porUsuario[b] - porUsuario[a]);
+  const usersBlock = el("gameStatusUsersBlock");
+  if (userNames.length > 0) {
+    usersBlock.hidden = false;
+    el("gameStatusUsers").innerHTML = userNames
+      .map((u) => {
+        const pct = total ? Math.round((porUsuario[u] / total) * 100) : 0;
+        return `<span class="pct-chip pct-chip--user">${escapeHtml(u)} ${pct}%</span>`;
+      })
+      .join("");
+  } else {
+    usersBlock.hidden = true;
+  }
+
+  computeGameTranslationCoverage(game)
+    .then(({ total: totalArquivos, matched: arquivosTraduzidos }) => {
+      const traduzidas = Math.round(avgPorArquivo * arquivosTraduzidos);
+      const totalLinhas = Math.round(avgPorArquivo * totalArquivos);
+      const pct = totalLinhas ? Math.round((traduzidas / totalLinhas) * 100) : 0;
+      const til = arquivosNoCache < totalArquivos ? "~" : ""; // estimativa se nem tudo foi escaneado ainda
+      const holder = el("gameStatusLinhasTraduzidas");
+      if (holder) holder.innerHTML = `${til}${traduzidas} / ${til}${totalLinhas} <small>(${pct}%)</small>`;
+    })
+    .catch(() => {
+      const holder = el("gameStatusLinhasTraduzidas");
+      if (holder) holder.innerHTML = "—";
+    });
+}
+
 async function openSubpasta(gameIdx, sub) {
   RT.state.cur = { gameIdx, subpasta: sub, folderPath: [], rows: null, presence: [] };
   renderCrumbs();
   el("btnBrowseBack").hidden = false;
+  el("gameStatusPanel").hidden = true;
   const box = el("browseList");
   box.innerHTML = `<p class="empty-state">Carregando arquivos (buscando em todas as subpastas)...</p>`;
   try {

@@ -103,7 +103,19 @@
       <button class="btn btn--ghost btn--small" id="btnOpenGlossary" hidden>📖 Glossário</button>
       <button class="btn btn--ghost btn--small" id="btnScanProgress" hidden>Escanear progresso completo</button>
     </div>
-    <div id="browseList" class="browse-list"></div>
+    <div class="browse__body">
+      <div id="browseList" class="browse-list"></div>
+      <aside class="game-status-panel" id="gameStatusPanel" hidden>
+        <div class="sidebar__block">
+          <span class="sidebar__label">Status do jogo</span>
+          <div class="game-status-panel__stats" id="gameStatusStats"></div>
+        </div>
+        <div class="sidebar__block" id="gameStatusUsersBlock" hidden>
+          <span class="sidebar__label">% revisado por pessoa</span>
+          <div class="user-breakdown__list" id="gameStatusUsers"></div>
+        </div>
+      </aside>
+    </div>
   </main>
 
   <!-- ===== REVISÃO ===== -->
