@@ -42,5 +42,27 @@
         ]
       }
     ]
+  },
+  {
+    "nome": "Atelier Ryza",
+    "owner": "JinYushiyuu",
+    "repo": "Atelier-Ryza-Ever-Darkness-the-Secret-Hideout-DX-PTBR",
+    "branch": "main",
+    "subpastas": [
+      {
+        "caminho": "Pack01",
+        "formato": "json",
+        "campos": [
+          "msg_string"
+        ]
+      },
+      {
+        "caminho": "Pack02",
+        "formato": "xml",
+        "campos": [
+          "Text"
+        ]
+      }
+    ]
   }
 ]
