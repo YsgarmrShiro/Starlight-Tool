@@ -814,8 +814,9 @@ async function bulkSetFolderReviewed(marking, prefix, label, triggerBtn) {
   }
 
   if (triggerBtn) triggerBtn.disabled = true;
-  let updated = 0;
   let skipped = 0;
+  const filesToCommit = []; // { path, content } — todos os .revisao alterados, pra virar UM commit só
+  const progressUpdates = {}; // fileKey -> { total, aprovados, porUsuario } — tudo isso vira UMA gravação só
 
   for (let i = 0; i < targets.length; i++) {
     const r = targets[i];
@@ -827,58 +828,88 @@ async function bulkSetFolderReviewed(marking, prefix, label, triggerBtn) {
       continue;
     }
     try {
-      const translated = await gh().getFile(game.owner, game.repo, `Traduzidas/${sub.caminho}/${r.rel}`, game.branch);
+      const [translated, metaFile] = await Promise.all([
+        gh().getFile(game.owner, game.repo, `Traduzidas/${sub.caminho}/${r.rel}`, game.branch),
+        gh().getFile(game.owner, game.repo, metaPath(sub, r.rel), game.branch),
+      ]);
       if (!translated) continue;
       const { entries } = RT.parse.extract(sub.formato, translated.text, sub.campos);
       if (entries.length === 0) continue;
 
-      const result = await enqueueWrite(() =>
-        readModifyWrite(
-          game.owner,
-          game.repo,
-          metaPath(sub, r.rel),
-          game.branch,
-          `${marking ? "Marca" : "Desmarca"} revisão em massa (${label}) — por ${RT.state.username}`,
-          (raw) => {
-            const meta = raw || {};
-            let changed = false;
-            entries.forEach((e) => {
-              const existing = meta[e.id];
-              if (marking) {
-                if (existing?.status === "approved") return; // já aprovado por alguém — não mexe
-                meta[e.id] = { status: "approved", comment: existing?.comment || "", reviewer: "" };
-                changed = true;
-              } else {
-                if (!(existing?.status === "approved" && !existing?.reviewer)) return; // só desfaz o que foi marcado em massa
-                meta[e.id] = { status: "pending", comment: existing?.comment || "", reviewer: "" };
-                changed = true;
-              }
-            });
-            return changed ? { data: meta } : null;
-          }
-        )
-      );
+      const meta = metaFile ? JSON.parse(metaFile.text) : {};
+      let changed = false;
+      entries.forEach((e) => {
+        const existing = meta[e.id];
+        if (marking) {
+          if (existing?.status === "approved") return; // já aprovado por alguém — não mexe
+          meta[e.id] = { status: "approved", comment: existing?.comment || "", reviewer: "" };
+          changed = true;
+        } else {
+          if (!(existing?.status === "approved" && !existing?.reviewer)) return; // só desfaz o que foi marcado em massa
+          meta[e.id] = { status: "pending", comment: existing?.comment || "", reviewer: "" };
+          changed = true;
+        }
+      });
+      if (!changed) continue;
 
-      if (result.data) {
-        let aprovados = 0;
-        const porUsuario = {};
-        entries.forEach((e) => {
-          const m = result.data[e.id];
-          if (m?.status === "approved") {
-            aprovados++;
-            if (m.reviewer) porUsuario[m.reviewer] = (porUsuario[m.reviewer] || 0) + 1;
-          }
-        });
-        await saveProgressEntry(game, sub, r.rel, { total: entries.length, aprovados, porUsuario });
-        updated++;
-      }
+      filesToCommit.push({ path: metaPath(sub, r.rel), content: JSON.stringify(meta, null, 2) });
+
+      let aprovados = 0;
+      const porUsuario = {};
+      entries.forEach((e) => {
+        const m = meta[e.id];
+        if (m?.status === "approved") {
+          aprovados++;
+          if (m.reviewer) porUsuario[m.reviewer] = (porUsuario[m.reviewer] || 0) + 1;
+        }
+      });
+      progressUpdates[fileKey(sub, r.rel)] = { total: entries.length, aprovados, porUsuario, atualizadoEm: new Date().toISOString() };
     } catch (e) {
-      console.error(`[StarlightTool] Falha ao ${marking ? "marcar" : "desmarcar"} "${r.rel}" em massa:`, e);
+      console.error(`[StarlightTool] Falha ao preparar "${r.rel}" pra revisão em massa:`, e);
     }
   }
 
-  toast(`${updated} arquivo(s) atualizado(s).${skipped ? ` ${skipped} pulado(s) por estarem em revisão agora.` : ""}`);
-  renderFolderLevel(); // reconstrói os cards do zero, já refletindo os novos números
+  if (filesToCommit.length === 0) {
+    if (triggerBtn) triggerBtn.disabled = false;
+    toast(`Nenhuma mudança necessária.${skipped ? ` ${skipped} pulado(s) por estarem em revisão agora.` : ""}`);
+    return;
+  }
+
+  if (triggerBtn) triggerBtn.textContent = "Enviando...";
+  try {
+    // todos os .revisao alterados viram um commit só
+    await gh().commitMultipleFiles(
+      game.owner,
+      game.repo,
+      game.branch,
+      `${marking ? "Marca" : "Desmarca"} revisão em massa (${label}) — por ${RT.state.username}`,
+      filesToCommit
+    );
+
+    // o progresso de todos esses arquivos é mesclado numa gravação só
+    const progResult = await enqueueWrite(() =>
+      readModifyWrite(
+        game.owner,
+        game.repo,
+        PROGRESS_PATH,
+        game.branch,
+        `Atualiza progresso após revisão em massa (${label})`,
+        (raw) => {
+          const data = raw || { arquivos: {} };
+          data.arquivos = { ...data.arquivos, ...progressUpdates };
+          return { data };
+        }
+      )
+    );
+    if (progResult.data) RT.state.progressData[gameKey(game)] = progResult.data;
+
+    toast(`${filesToCommit.length} arquivo(s) atualizado(s) num commit só.${skipped ? ` ${skipped} pulado(s) por estarem em revisão agora.` : ""}`);
+  } catch (e) {
+    toast(`Erro ao aplicar em massa: ${friendlyError(e)}`, "error");
+  } finally {
+    if (triggerBtn) triggerBtn.disabled = false;
+    renderFolderLevel(); // reconstrói os cards do zero, já refletindo os novos números
+  }
 }
 
 /* =========================================================

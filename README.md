@@ -258,6 +258,10 @@ automaticamente, e a ferramenta avisa no final quantos foram atualizados e
 quantos foram pulados. Em pastas com mais de 150 arquivos, ela avisa antes
 que pode demorar.
 
+Tudo isso vira **um commit só** (usando a mesma técnica de commit atômico
+do salvamento normal) — não importa se são 5 ou 500 arquivos, o histórico
+do repositório não fica poluído com um commit por arquivo.
+
 ## 14. Ícone da página
 
 O mesmo `img/icon.jpg` usado no topo também aparece como favicon (o
