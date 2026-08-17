@@ -64,5 +64,23 @@
         ]
       }
     ]
+  },
+  {
+    "nome": "Neptunia Rebith 2",
+    "owner": "PegadaDLancha",
+    "repo": "NepRB2-BR",
+    "branch": "main",
+    "subpastas": [
+      {
+        "caminho": "@Database",
+        "formato": "txt",
+        "campos": []
+      },
+      {
+        "caminho": "@Scripts",
+        "formato": "txt",
+        "campos": []
+      }
+    ]
   }
 ]
