@@ -69,6 +69,11 @@ repositório da ferramenta), cada jogo tem:
       ferramenta trata **cada linha do arquivo como um item**, sem
       exigir esse formato de chave — útil pra `.txt` que é só texto puro,
       uma frase por linha.
+      Logo abaixo desse campo tem outro, **"ignorar linhas que começam
+      com"** — qualquer linha que comece com um dos textos ali (separados
+      por vírgula) nunca vira item nem é tocada ao salvar. Útil pra pular
+      linhas de marcador/separador que aparecem no meio do arquivo, tipo
+      `\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\ 5001`.
     - `csv`: **números das colunas**, começando em 0 (ex: `0, 2` pra
       pegar a primeira e a terceira coluna). CSV não tem nome de campo,
       só posição.

@@ -75,16 +75,21 @@
         <div class="subpastas-list"></div>
         <button type="button" class="btn btn--ghost btn--small gf-add-sub">+ subpasta</button>
         <template class="tpl-subpasta">
-          <div class="subpasta-row">
-            <input class="sp-caminho" placeholder="caminho (ex: dialogos)">
-            <select class="sp-formato">
-              <option value="json">json</option>
-              <option value="xml">xml</option>
-              <option value="txt">txt</option>
-              <option value="csv">csv</option>
-            </select>
-            <input class="sp-campos" placeholder="json/xml: nomes dos campos (text, msg_string) · txt: chaves, ou vazio p/ linha a linha · csv: nº das colunas (0, 2)">
-            <button type="button" class="btn btn--ghost btn--small sp-remove">remover</button>
+          <div class="subpasta-block">
+            <div class="subpasta-row">
+              <input class="sp-caminho" placeholder="caminho (ex: dialogos)">
+              <select class="sp-formato">
+                <option value="json">json</option>
+                <option value="xml">xml</option>
+                <option value="txt">txt</option>
+                <option value="csv">csv</option>
+              </select>
+              <input class="sp-campos" placeholder="json/xml: nomes dos campos (text, msg_string) · txt: chaves, ou vazio p/ linha a linha · csv: nº das colunas (0, 2)">
+              <button type="button" class="btn btn--ghost btn--small sp-remove">remover</button>
+            </div>
+            <div class="subpasta-row2">
+              <input class="sp-ignorar" placeholder="txt (opcional): ignorar linhas que começam com... separado por vírgula (ex: \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\)">
+            </div>
           </div>
         </template>
         <div class="game-form__actions">

@@ -118,7 +118,13 @@ RT.parse = (() => {
 
   /* ---------------- TXT (chave: valor / chave=valor, uma por linha —
      ou, se nenhuma chave for configurada, uma linha inteira = um item) ---------------- */
-  function scanTXTFields(text, fields) {
+  function lineStartsWithAny(line, prefixes) {
+    if (!prefixes || prefixes.length === 0) return false;
+    const trimmed = line.replace(/^[ \t]+/, "");
+    return prefixes.some((p) => p && trimmed.startsWith(p));
+  }
+
+  function scanTXTFields(text, fields, ignorarPrefixos) {
     const entries = [];
     fields.forEach((key) => {
       const re = new RegExp(`^([ \\t]*${escapeRegExp(key)}[ \\t]*[:=][ \\t]*)(.*)$`, "gm");
@@ -131,7 +137,7 @@ RT.parse = (() => {
         const end = start + value.length;
         const id = `${key}#${i}`;
         i++; // sempre incrementa, mesmo se pular — mantém o índice alinhado
-        if (value.trim() === "") continue;
+        if (value.trim() === "" || lineStartsWithAny(m[0], ignorarPrefixos)) continue;
         entries.push({ id, value, start, end });
       }
     });
@@ -140,8 +146,10 @@ RT.parse = (() => {
   }
 
   /** Sem nenhuma chave configurada: cada linha do arquivo vira um item,
-   *  do jeito que ela está (sem exigir "chave: valor"). */
-  function scanTXTLines(text) {
+   *  do jeito que ela está (sem exigir "chave: valor"). Linhas que
+   *  começam com algum dos prefixos configurados (ex: um marcador de
+   *  seção) são puladas — nunca viram item nem são tocadas ao salvar. */
+  function scanTXTLines(text, ignorarPrefixos) {
     const entries = [];
     let i = 0;
     let lineNum = 0;
@@ -152,20 +160,23 @@ RT.parse = (() => {
       let end = i;
       if (end > start && text[end - 1] === "\r") end--;
       const value = text.slice(start, end);
-      if (value.trim() !== "") entries.push({ id: `line#${lineNum}`, value, start, end });
+      if (value.trim() !== "" && !lineStartsWithAny(value, ignorarPrefixos)) {
+        entries.push({ id: `line#${lineNum}`, value, start, end });
+      }
       lineNum++;
       if (text[i] === "\n") i++;
     }
     return entries;
   }
 
-  function extractTXT(text, fields) {
-    const entries = fields.size === 0 ? scanTXTLines(text) : scanTXTFields(text, fields);
+  function extractTXT(text, fields, ignorarPrefixos) {
+    const entries = fields.size === 0 ? scanTXTLines(text, ignorarPrefixos) : scanTXTFields(text, fields, ignorarPrefixos);
     return { data: text, entries };
   }
 
-  function applyTXT(text, edits, fieldsArr) {
-    const entries = fieldsArr.length === 0 ? scanTXTLines(text) : scanTXTFields(text, new Set(fieldsArr));
+  function applyTXT(text, edits, fieldsArr, ignorarPrefixos) {
+    const entries =
+      fieldsArr.length === 0 ? scanTXTLines(text, ignorarPrefixos) : scanTXTFields(text, new Set(fieldsArr), ignorarPrefixos);
     const targets = entries.filter((e) => edits.has(e.id)).sort((a, b) => b.start - a.start);
     let result = text;
     targets.forEach((e) => {
@@ -248,19 +259,19 @@ RT.parse = (() => {
   }
 
   /* ---------------- despachante por formato ---------------- */
-  function extract(format, text, fieldsArr) {
+  function extract(format, text, fieldsArr, ignorarPrefixos = []) {
     const fields = new Set(fieldsArr);
     if (format === "json") return extractJSON(text, fields);
     if (format === "xml") return extractXML(text, fields);
-    if (format === "txt") return extractTXT(text, fields);
+    if (format === "txt") return extractTXT(text, fields, ignorarPrefixos);
     if (format === "csv") return extractCSV(text, fields);
     throw new Error("Formato não suportado: " + format);
   }
 
-  function apply(format, data, edits, fieldsArr) {
+  function apply(format, data, edits, fieldsArr, ignorarPrefixos = []) {
     if (format === "json") return applyJSON(data, edits, fieldsArr);
     if (format === "xml") return applyXML(data, edits);
-    if (format === "txt") return applyTXT(data, edits, fieldsArr);
+    if (format === "txt") return applyTXT(data, edits, fieldsArr, ignorarPrefixos);
     if (format === "csv") return applyCSV(data, edits, fieldsArr);
     throw new Error("Formato não suportado: " + format);
   }

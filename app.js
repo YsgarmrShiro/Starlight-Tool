@@ -290,10 +290,11 @@ function openGameForm(index) {
 
   function addSubRow(sub) {
     const row = subTpl.content.cloneNode(true);
-    const rowEl = row.querySelector(".subpasta-row");
+    const rowEl = row.querySelector(".subpasta-block");
     rowEl.querySelector(".sp-caminho").value = sub?.caminho || "";
     rowEl.querySelector(".sp-formato").value = sub?.formato || "json";
     rowEl.querySelector(".sp-campos").value = (sub?.campos || []).join(", ");
+    rowEl.querySelector(".sp-ignorar").value = (sub?.ignorarPrefixos || []).join(", ");
     rowEl.querySelector(".sp-remove").addEventListener("click", () => rowEl.remove());
     subList.appendChild(rowEl);
   }
@@ -313,11 +314,16 @@ function openGameForm(index) {
 
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
-    const subpastas = Array.from(subList.querySelectorAll(".subpasta-row")).map((row) => ({
+    const subpastas = Array.from(subList.querySelectorAll(".subpasta-block")).map((row) => ({
       caminho: row.querySelector(".sp-caminho").value.trim().replace(/^\/+|\/+$/g, ""),
       formato: row.querySelector(".sp-formato").value,
       campos: row
         .querySelector(".sp-campos")
+        .value.split(",")
+        .map((s) => s.trim())
+        .filter(Boolean),
+      ignorarPrefixos: row
+        .querySelector(".sp-ignorar")
         .value.split(",")
         .map((s) => s.trim())
         .filter(Boolean),
@@ -874,7 +880,7 @@ async function bulkSetFolderReviewed(marking, prefix, label, triggerBtn) {
         gh().getFile(game.owner, game.repo, metaPath(sub, r.rel), game.branch),
       ]);
       if (!translated) continue;
-      const { entries } = RT.parse.extract(sub.formato, translated.text, sub.campos);
+      const { entries } = RT.parse.extract(sub.formato, translated.text, sub.campos, sub.ignorarPrefixos);
       if (entries.length === 0) continue;
 
       const meta = metaFile ? JSON.parse(metaFile.text) : {};
@@ -1018,7 +1024,7 @@ async function scanSubpastaProgress(game, sub, rows, onProgress) {
         gh().getFile(game.owner, game.repo, metaPath(sub, r.rel), game.branch),
       ]);
       if (translated) {
-        const { entries } = RT.parse.extract(sub.formato, translated.text, sub.campos);
+        const { entries } = RT.parse.extract(sub.formato, translated.text, sub.campos, sub.ignorarPrefixos);
         const meta = metaFile ? JSON.parse(metaFile.text) : {};
         let aprovados = 0;
         const porUsuario = {};
@@ -1687,8 +1693,8 @@ async function openReview(gameIdx, sub, rel) {
 
     if (!original || !translated) throw new Error("Arquivo original ou traduzido não encontrado.");
 
-    const origExtract = RT.parse.extract(sub.formato, original.text, sub.campos);
-    const transExtract = RT.parse.extract(sub.formato, translated.text, sub.campos);
+    const origExtract = RT.parse.extract(sub.formato, original.text, sub.campos, sub.ignorarPrefixos);
+    const transExtract = RT.parse.extract(sub.formato, translated.text, sub.campos, sub.ignorarPrefixos);
     const meta = metaFile ? JSON.parse(metaFile.text) : {};
     const transById = new Map(transExtract.entries.map((e) => [e.id, e]));
 
@@ -1914,7 +1920,7 @@ async function performSaveInBackground(f) {
       gh().getFile(f.game.owner, f.game.repo, `Traduzidas/${f.sub.caminho}/${f.rel}`, f.game.branch),
       gh().getFile(f.game.owner, f.game.repo, metaPath(f.sub, f.rel), f.game.branch),
     ]);
-    const latestExtract = RT.parse.extract(f.sub.formato, latestTranslated.text, f.sub.campos);
+    const latestExtract = RT.parse.extract(f.sub.formato, latestTranslated.text, f.sub.campos, f.sub.ignorarPrefixos);
     const latestTransById = new Map(latestExtract.entries.map((e) => [e.id, e.value]));
     const latestMeta = latestMetaFile ? JSON.parse(latestMetaFile.text) : {};
 
@@ -1948,7 +1954,7 @@ async function performSaveInBackground(f) {
     });
 
     const newTranslatedText =
-      textEdits.size > 0 ? RT.parse.apply(f.sub.formato, latestExtract.data, textEdits, f.sub.campos) : null;
+      textEdits.size > 0 ? RT.parse.apply(f.sub.formato, latestExtract.data, textEdits, f.sub.campos, f.sub.ignorarPrefixos) : null;
 
     const filesToCommit = [];
     if (newTranslatedText !== null) {

@@ -147,9 +147,12 @@ code{ background:var(--panel-alt); padding:1px 6px; border-radius:5px; font-fami
 .tag{ font-size:11px; background:var(--panel-alt); border:1px solid var(--border); border-radius:999px; padding:4px 12px; color:var(--text-dim); }
 
 .game-form{ background:var(--panel-solid); border:1px solid var(--border); border-radius:var(--radius); padding:22px; display:flex; flex-direction:column; gap:14px; }
-.subpastas-list{ display:flex; flex-direction:column; gap:8px; }
+.subpastas-list{ display:flex; flex-direction:column; gap:14px; }
+.subpasta-block{ display:flex; flex-direction:column; gap:6px; padding-bottom:8px; border-bottom:1px solid var(--border); }
+.subpasta-block:last-child{ border-bottom:none; padding-bottom:0; }
 .subpasta-row{ display:grid; grid-template-columns:1fr 100px 2fr auto; gap:8px; align-items:center; }
-.subpasta-row input, .subpasta-row select{ background:var(--panel-alt); border:1px solid var(--border); border-radius:var(--radius-sm); padding:8px 10px; color:var(--text); font-size:13px; }
+.subpasta-row2{ display:grid; grid-template-columns:1fr; gap:8px; }
+.subpasta-row input, .subpasta-row select, .subpasta-row2 input{ background:var(--panel-alt); border:1px solid var(--border); border-radius:var(--radius-sm); padding:8px 10px; color:var(--text); font-size:13px; }
 .game-form__actions{ display:flex; gap:8px; margin-top:6px; }
 
 /* ===== BROWSE SCREEN ===== */
