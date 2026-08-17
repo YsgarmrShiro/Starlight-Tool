@@ -22,46 +22,6 @@
     ]
   },
   {
-    "nome": "Teste",
-    "owner": "YsgarmrShiro",
-    "repo": "Teste",
-    "branch": "main",
-    "subpastas": [
-      {
-        "caminho": "Pack01",
-        "formato": "json",
-        "campos": [
-          "msg_string"
-        ],
-        "ignorarPrefixos": []
-      },
-      {
-        "caminho": "Pack02",
-        "formato": "xml",
-        "campos": [
-          "Text"
-        ],
-        "ignorarPrefixos": []
-      },
-      {
-        "caminho": "@Database",
-        "formato": "txt",
-        "campos": [],
-        "ignorarPrefixos": [
-          "\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\"
-        ]
-      },
-      {
-        "caminho": "@Scripts",
-        "formato": "txt",
-        "campos": [],
-        "ignorarPrefixos": [
-          "\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\"
-        ]
-      }
-    ]
-  },
-  {
     "nome": "Atelier Ryza",
     "owner": "JinYushiyuu",
     "repo": "Atelier-Ryza-Ever-Darkness-the-Secret-Hideout-DX-PTBR",
