@@ -65,7 +65,10 @@ repositório da ferramenta), cada jogo tem:
     - `json`: nomes das chaves que contêm o texto (ex: `text, msg_string`).
     - `xml`: nomes das tags ou atributos (ex: `Text`).
     - `txt`: nomes das chaves em linhas no formato `chave: valor` ou
-      `chave=valor` (ex: `msg_001, msg_002`).
+      `chave=valor` (ex: `msg_001, msg_002`). **Se deixar em branco**, a
+      ferramenta trata **cada linha do arquivo como um item**, sem
+      exigir esse formato de chave — útil pra `.txt` que é só texto puro,
+      uma frase por linha.
     - `csv`: **números das colunas**, começando em 0 (ex: `0, 2` pra
       pegar a primeira e a terceira coluna). CSV não tem nome de campo,
       só posição.

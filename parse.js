@@ -116,7 +116,8 @@ RT.parse = (() => {
     return new XMLSerializer().serializeToString(doc);
   }
 
-  /* ---------------- TXT (chave: valor / chave=valor, uma por linha) ---------------- */
+  /* ---------------- TXT (chave: valor / chave=valor, uma por linha —
+     ou, se nenhuma chave for configurada, uma linha inteira = um item) ---------------- */
   function scanTXTFields(text, fields) {
     const entries = [];
     fields.forEach((key) => {
@@ -138,12 +139,33 @@ RT.parse = (() => {
     return entries;
   }
 
+  /** Sem nenhuma chave configurada: cada linha do arquivo vira um item,
+   *  do jeito que ela está (sem exigir "chave: valor"). */
+  function scanTXTLines(text) {
+    const entries = [];
+    let i = 0;
+    let lineNum = 0;
+    const n = text.length;
+    while (i < n) {
+      const start = i;
+      while (i < n && text[i] !== "\n") i++;
+      let end = i;
+      if (end > start && text[end - 1] === "\r") end--;
+      const value = text.slice(start, end);
+      if (value.trim() !== "") entries.push({ id: `line#${lineNum}`, value, start, end });
+      lineNum++;
+      if (text[i] === "\n") i++;
+    }
+    return entries;
+  }
+
   function extractTXT(text, fields) {
-    return { data: text, entries: scanTXTFields(text, fields) };
+    const entries = fields.size === 0 ? scanTXTLines(text) : scanTXTFields(text, fields);
+    return { data: text, entries };
   }
 
   function applyTXT(text, edits, fieldsArr) {
-    const entries = scanTXTFields(text, new Set(fieldsArr));
+    const entries = fieldsArr.length === 0 ? scanTXTLines(text) : scanTXTFields(text, new Set(fieldsArr));
     const targets = entries.filter((e) => edits.has(e.id)).sort((a, b) => b.start - a.start);
     let result = text;
     targets.forEach((e) => {
