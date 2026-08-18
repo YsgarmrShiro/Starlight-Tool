@@ -769,12 +769,29 @@ function renderFolderLevel() {
 
       const progressHtml = f.hasTranslation && !isBlocked ? pctChip("Revisão", stats?.aprovados || 0, stats?.total || 0) : "";
 
+      const fileActions =
+        RT.state.role === "admin" && f.hasTranslation && !isBlocked
+          ? [
+              {
+                label: "⬇",
+                title: `Baixar itens de "${f.name}" pra traduzir fora da ferramenta`,
+                onClick: () => exportFileForTranslation(game, c.subpasta, f.rel),
+              },
+              {
+                label: "⬆",
+                title: `Importar tradução de volta pra "${f.name}"`,
+                onClick: () => triggerImportFile(game, c.subpasta, f.rel),
+              },
+            ]
+          : [];
+
       box.appendChild(
         makeCard({
           title: escapeHtml(f.name),
           badgeHtml,
           progressHtml,
           disabled: !f.hasTranslation || isBlocked,
+          actions: fileActions,
           onClick: f.hasTranslation && !isBlocked ? () => openReview(c.gameIdx, c.subpasta, f.rel) : null,
         })
       );
@@ -835,6 +852,147 @@ function progressBarHtml({ approved, total }) {
 }
 
 /* ---------- marcar/desmarcar pasta inteira como revisada (em massa) ---------- */
+/* ---------- exportar/importar tradução externa (admin) ----------
+   Pra arquivos grandes demais pra revisar item por item na tela: baixa
+   um .json com {id, original, translation} de cada item, a pessoa edita
+   fora da ferramenta (planilha, editor de texto, IA, o que preferir), e
+   depois importa de volta — vira um commit só, com os itens alterados
+   marcados como Pendente pra alguém revisar dentro da ferramenta depois. */
+async function exportFileForTranslation(game, sub, rel) {
+  try {
+    const [original, translated] = await Promise.all([
+      gh().getFile(game.owner, game.repo, `Originais/${sub.caminho}/${rel}`, game.branch),
+      gh().getFile(game.owner, game.repo, `Traduzidas/${sub.caminho}/${rel}`, game.branch),
+    ]);
+    if (!translated) {
+      toast("Arquivo traduzido não encontrado.", "error");
+      return;
+    }
+    const transEntries = RT.parse.extract(sub.formato, translated.text, sub.campos, sub.ignorarPrefixos).entries;
+    const origById = original
+      ? new Map(RT.parse.extract(sub.formato, original.text, sub.campos, sub.ignorarPrefixos).entries.map((e) => [e.id, e.value]))
+      : new Map();
+
+    const payload = transEntries.map((e) => ({ id: e.id, original: origById.get(e.id) ?? "", translation: e.value }));
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = rel.replace(/[\\/]/g, "_") + ".traducao.json";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    toast(`${payload.length} item(ns) baixado(s). Edite o campo "translation" de cada um e importe de volta quando terminar.`);
+  } catch (e) {
+    toast("Erro ao gerar o arquivo: " + friendlyError(e), "error");
+  }
+}
+
+let pendingImportTarget = null;
+function triggerImportFile(game, sub, rel) {
+  pendingImportTarget = { game, sub, rel };
+  el("importFileInput").click();
+}
+
+el("importFileInput").addEventListener("change", async (ev) => {
+  const file = ev.target.files[0];
+  ev.target.value = ""; // permite selecionar o mesmo arquivo de novo depois
+  if (!file || !pendingImportTarget) return;
+  const { game, sub, rel } = pendingImportTarget;
+  pendingImportTarget = null;
+  try {
+    const text = await file.text();
+    const imported = JSON.parse(text);
+    await importTranslationFile(game, sub, rel, imported);
+  } catch (e) {
+    toast("Erro ao importar: " + friendlyError(e), "error");
+  }
+});
+
+async function importTranslationFile(game, sub, rel, imported) {
+  if (!Array.isArray(imported)) {
+    toast('Arquivo inválido — esperava uma lista de itens (o mesmo formato que foi baixado).', "error");
+    return;
+  }
+
+  const pathLabel = filePathFor(null, sub, rel);
+  const presenceResult = await registerPresence(game, pathLabel);
+  if (presenceResult.blocked) {
+    toast(
+      presenceResult.reason === "saving"
+        ? "Esse arquivo está com um salvamento em andamento agora. Tente de novo em instantes."
+        : `Esse arquivo já está sendo revisado por ${presenceResult.occupant.usuario} agora.`,
+      "error"
+    );
+    return;
+  }
+  await markSaving(game, pathLabel);
+  markFilePresenceLocally(sub, pathLabel, { arquivo: pathLabel, usuario: RT.state.username, desde: new Date().toISOString(), salvando: true });
+
+  try {
+    const [translated, metaFile] = await Promise.all([
+      gh().getFile(game.owner, game.repo, `Traduzidas/${sub.caminho}/${rel}`, game.branch),
+      gh().getFile(game.owner, game.repo, metaPath(sub, rel), game.branch),
+    ]);
+    if (!translated) throw new Error("Arquivo traduzido não encontrado.");
+    const { data, entries } = RT.parse.extract(sub.formato, translated.text, sub.campos, sub.ignorarPrefixos);
+    const currentById = new Map(entries.map((e) => [e.id, e.value]));
+    const meta = metaFile ? JSON.parse(metaFile.text) : {};
+
+    const textEdits = new Map();
+    let semId = 0;
+    imported.forEach((item) => {
+      if (!item || typeof item.id !== "string" || typeof item.translation !== "string") return;
+      if (!currentById.has(item.id)) {
+        semId++;
+        return;
+      }
+      if (item.translation === currentById.get(item.id)) return; // sem mudança, pula
+      textEdits.set(item.id, item.translation);
+      const existing = meta[item.id];
+      meta[item.id] = { status: "pending", comment: existing?.comment || "", reviewer: "" };
+    });
+
+    if (textEdits.size === 0) {
+      toast(`Nada pra importar (0 itens mudaram).${semId ? ` ${semId} item(ns) do arquivo não bateram com o original atual.` : ""}`);
+      return;
+    }
+
+    const newText = RT.parse.apply(sub.formato, data, textEdits, sub.campos, sub.ignorarPrefixos);
+    await gh().commitMultipleFiles(
+      game.owner,
+      game.repo,
+      game.branch,
+      `Importa tradução externa (${rel}) — por ${RT.state.username}`,
+      [
+        { path: `Traduzidas/${sub.caminho}/${rel}`, content: newText },
+        { path: metaPath(sub, rel), content: JSON.stringify(meta, null, 2) },
+      ]
+    );
+
+    let aprovados = 0;
+    const porUsuario = {};
+    entries.forEach((e) => {
+      const m = meta[e.id];
+      if (m?.status === "approved") {
+        aprovados++;
+        if (m.reviewer) porUsuario[m.reviewer] = (porUsuario[m.reviewer] || 0) + 1;
+      }
+    });
+    await saveProgressEntry(game, sub, rel, { total: entries.length, aprovados, porUsuario });
+
+    toast(
+      `${textEdits.size} item(ns) importado(s) e marcado(s) como Pendente.${semId ? ` ${semId} não encontrados no arquivo atual.` : ""}`
+    );
+  } catch (e) {
+    toast("Erro ao importar: " + friendlyError(e), "error");
+  } finally {
+    await releasePresenceFor(game, pathLabel);
+    markFilePresenceLocally(sub, pathLabel, null);
+  }
+}
+
 async function bulkSetFolderReviewed(marking, prefix, label, triggerBtn) {
   const c = RT.state.cur;
   if (!c || !c.subpasta || !c.rows) return;

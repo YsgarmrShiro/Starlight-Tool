@@ -306,6 +306,30 @@ lateral direita com:
 - **% revisado por pessoa** (o mesmo painel que já existia, só que agora
   fica aqui do lado em vez de em cima da lista de subpastas).
 
+## 16. Exportar/importar tradução externa (admin) — pra arquivos grandes
+
+Pra arquivos grandes demais pra revisar item por item na tela (ou pra quem
+prefere traduzir numa planilha, editor de texto ou até com ajuda de IA),
+quem é **admin** tem dois mini-botões em cada card de arquivo (ao lado do
+✓/✕): **⬇** e **⬆**.
+
+- **⬇ (baixar)**: gera um `.json` com todos os itens daquele arquivo —
+  `{ id, original, translation }` — e baixa direto no seu computador
+  (não é um commit, é só um download local). Edite o campo `translation`
+  de cada item à vontade, fora da ferramenta.
+- **⬆ (importar)**: escolhe esse `.json` editado de volta. A ferramenta
+  casa cada item pelo `id`, aplica só os que realmente mudaram (compara
+  com o texto atual do arquivo), e grava tudo — texto traduzido e status
+  — **num commit só**. Os itens alterados voltam como **Pendente** (não
+  aprovados automaticamente), pra alguém revisar dentro da ferramenta
+  depois.
+
+Esse processo trava o arquivo do mesmo jeito que um salvamento normal
+(ninguém mais entra nele enquanto a importação está rolando), e itens do
+`.json` cujo `id` não bate mais com o arquivo atual (por exemplo, se
+alguém mudou a estrutura do arquivo nesse meio tempo) são ignorados, com
+aviso de quantos foram pulados.
+
 ## Limitações conhecidas desta primeira versão (pra ajustar depois)
 
 - O progresso (%) não é calculado automaticamente ao navegar — tem um botão
