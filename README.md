@@ -74,6 +74,22 @@ repositório da ferramenta), cada jogo tem:
       por vírgula) nunca vira item nem é tocada ao salvar. Útil pra pular
       linhas de marcador/separador que aparecem no meio do arquivo, tipo
       `\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\ 5001`.
+
+      Se, em vez de só *pular* essas linhas de marcador, você quer que
+      **tudo entre um marcador e o próximo vire um item só** (mesmo
+      passando de várias linhas — útil quando o jogo não quebra linha
+      sozinho e manda cada linha de diálogo separada, mas ainda são uma
+      fala só), use o campo **"delimitador de blocos"** em vez do de
+      ignorar. Ele funciona assim:
+      - Qualquer linha que comece com o texto configurado marca o
+        **início de um item novo**.
+      - Tudo até a próxima linha de marcador vira o **valor** desse item
+        (quebras de linha internas preservadas).
+      - O que vier depois do delimitador, na mesma linha (ex: o número
+        "5001"), vira o **ID** do item — fica estável mesmo que a ordem
+        dos blocos mude depois.
+      - Um marcador sem nada depois dele (tipo um `EOF` no fim do
+        arquivo) simplesmente não vira item.
     - `csv`: **números das colunas**, começando em 0 (ex: `0, 2` pra
       pegar a primeira e a terceira coluna). CSV não tem nome de campo,
       só posição.

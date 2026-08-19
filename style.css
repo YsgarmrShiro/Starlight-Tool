@@ -151,7 +151,7 @@ code{ background:var(--panel-alt); padding:1px 6px; border-radius:5px; font-fami
 .subpasta-block{ display:flex; flex-direction:column; gap:6px; padding-bottom:8px; border-bottom:1px solid var(--border); }
 .subpasta-block:last-child{ border-bottom:none; padding-bottom:0; }
 .subpasta-row{ display:grid; grid-template-columns:1fr 100px 2fr auto; gap:8px; align-items:center; }
-.subpasta-row2{ display:grid; grid-template-columns:1fr; gap:8px; }
+.subpasta-row2{ display:grid; grid-template-columns:1fr 1fr; gap:8px; }
 .subpasta-row input, .subpasta-row select, .subpasta-row2 input{ background:var(--panel-alt); border:1px solid var(--border); border-radius:var(--radius-sm); padding:8px 10px; color:var(--text); font-size:13px; }
 .game-form__actions{ display:flex; gap:8px; margin-top:6px; }
 
@@ -288,6 +288,7 @@ code{ background:var(--panel-alt); padding:1px 6px; border-radius:5px; font-fami
 @media (max-width: 720px){
   .field-grid{ grid-template-columns:1fr; }
   .subpasta-row{ grid-template-columns:1fr; }
+  .subpasta-row2{ grid-template-columns:1fr; }
   .app{ grid-template-columns:1fr; }
   .sidebar{ border-right:none; border-bottom:1px solid var(--border); flex-direction:row; flex-wrap:wrap; position:static; max-height:none; }
   .glossary-panel{ border-left:none; border-top:1px solid var(--border); position:static; max-height:none; }

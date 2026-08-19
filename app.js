@@ -295,6 +295,7 @@ function openGameForm(index) {
     rowEl.querySelector(".sp-formato").value = sub?.formato || "json";
     rowEl.querySelector(".sp-campos").value = (sub?.campos || []).join(", ");
     rowEl.querySelector(".sp-ignorar").value = (sub?.ignorarPrefixos || []).join(", ");
+    rowEl.querySelector(".sp-delimitador").value = sub?.delimitador || "";
     rowEl.querySelector(".sp-remove").addEventListener("click", () => rowEl.remove());
     subList.appendChild(rowEl);
   }
@@ -327,6 +328,7 @@ function openGameForm(index) {
         .value.split(",")
         .map((s) => s.trim())
         .filter(Boolean),
+      delimitador: row.querySelector(".sp-delimitador").value.trim(),
     }));
     const updated = {
       nome: form.querySelector(".gf-nome").value.trim(),
@@ -868,9 +870,9 @@ async function exportFileForTranslation(game, sub, rel) {
       toast("Arquivo traduzido não encontrado.", "error");
       return;
     }
-    const transEntries = RT.parse.extract(sub.formato, translated.text, sub.campos, sub.ignorarPrefixos).entries;
+    const transEntries = RT.parse.extract(sub.formato, translated.text, sub.campos, sub.ignorarPrefixos, sub.delimitador).entries;
     const origById = original
-      ? new Map(RT.parse.extract(sub.formato, original.text, sub.campos, sub.ignorarPrefixos).entries.map((e) => [e.id, e.value]))
+      ? new Map(RT.parse.extract(sub.formato, original.text, sub.campos, sub.ignorarPrefixos, sub.delimitador).entries.map((e) => [e.id, e.value]))
       : new Map();
 
     const payload = transEntries.map((e) => ({ id: e.id, original: origById.get(e.id) ?? "", translation: e.value }));
@@ -936,7 +938,7 @@ async function importTranslationFile(game, sub, rel, imported) {
       gh().getFile(game.owner, game.repo, metaPath(sub, rel), game.branch),
     ]);
     if (!translated) throw new Error("Arquivo traduzido não encontrado.");
-    const { data, entries } = RT.parse.extract(sub.formato, translated.text, sub.campos, sub.ignorarPrefixos);
+    const { data, entries } = RT.parse.extract(sub.formato, translated.text, sub.campos, sub.ignorarPrefixos, sub.delimitador);
     const currentById = new Map(entries.map((e) => [e.id, e.value]));
     const meta = metaFile ? JSON.parse(metaFile.text) : {};
 
@@ -959,7 +961,7 @@ async function importTranslationFile(game, sub, rel, imported) {
       return;
     }
 
-    const newText = RT.parse.apply(sub.formato, data, textEdits, sub.campos, sub.ignorarPrefixos);
+    const newText = RT.parse.apply(sub.formato, data, textEdits, sub.campos, sub.ignorarPrefixos, sub.delimitador);
     await gh().commitMultipleFiles(
       game.owner,
       game.repo,
@@ -1038,7 +1040,7 @@ async function bulkSetFolderReviewed(marking, prefix, label, triggerBtn) {
         gh().getFile(game.owner, game.repo, metaPath(sub, r.rel), game.branch),
       ]);
       if (!translated) continue;
-      const { entries } = RT.parse.extract(sub.formato, translated.text, sub.campos, sub.ignorarPrefixos);
+      const { entries } = RT.parse.extract(sub.formato, translated.text, sub.campos, sub.ignorarPrefixos, sub.delimitador);
       if (entries.length === 0) continue;
 
       const meta = metaFile ? JSON.parse(metaFile.text) : {};
@@ -1182,7 +1184,7 @@ async function scanSubpastaProgress(game, sub, rows, onProgress) {
         gh().getFile(game.owner, game.repo, metaPath(sub, r.rel), game.branch),
       ]);
       if (translated) {
-        const { entries } = RT.parse.extract(sub.formato, translated.text, sub.campos, sub.ignorarPrefixos);
+        const { entries } = RT.parse.extract(sub.formato, translated.text, sub.campos, sub.ignorarPrefixos, sub.delimitador);
         const meta = metaFile ? JSON.parse(metaFile.text) : {};
         let aprovados = 0;
         const porUsuario = {};
@@ -1851,8 +1853,8 @@ async function openReview(gameIdx, sub, rel) {
 
     if (!original || !translated) throw new Error("Arquivo original ou traduzido não encontrado.");
 
-    const origExtract = RT.parse.extract(sub.formato, original.text, sub.campos, sub.ignorarPrefixos);
-    const transExtract = RT.parse.extract(sub.formato, translated.text, sub.campos, sub.ignorarPrefixos);
+    const origExtract = RT.parse.extract(sub.formato, original.text, sub.campos, sub.ignorarPrefixos, sub.delimitador);
+    const transExtract = RT.parse.extract(sub.formato, translated.text, sub.campos, sub.ignorarPrefixos, sub.delimitador);
     const meta = metaFile ? JSON.parse(metaFile.text) : {};
     const transById = new Map(transExtract.entries.map((e) => [e.id, e]));
 
@@ -2078,7 +2080,7 @@ async function performSaveInBackground(f) {
       gh().getFile(f.game.owner, f.game.repo, `Traduzidas/${f.sub.caminho}/${f.rel}`, f.game.branch),
       gh().getFile(f.game.owner, f.game.repo, metaPath(f.sub, f.rel), f.game.branch),
     ]);
-    const latestExtract = RT.parse.extract(f.sub.formato, latestTranslated.text, f.sub.campos, f.sub.ignorarPrefixos);
+    const latestExtract = RT.parse.extract(f.sub.formato, latestTranslated.text, f.sub.campos, f.sub.ignorarPrefixos, f.sub.delimitador);
     const latestTransById = new Map(latestExtract.entries.map((e) => [e.id, e.value]));
     const latestMeta = latestMetaFile ? JSON.parse(latestMetaFile.text) : {};
 
@@ -2112,7 +2114,7 @@ async function performSaveInBackground(f) {
     });
 
     const newTranslatedText =
-      textEdits.size > 0 ? RT.parse.apply(f.sub.formato, latestExtract.data, textEdits, f.sub.campos, f.sub.ignorarPrefixos) : null;
+      textEdits.size > 0 ? RT.parse.apply(f.sub.formato, latestExtract.data, textEdits, f.sub.campos, f.sub.ignorarPrefixos, f.sub.delimitador) : null;
 
     const filesToCommit = [];
     if (newTranslatedText !== null) {

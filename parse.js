@@ -169,12 +169,68 @@ RT.parse = (() => {
     return entries;
   }
 
-  function extractTXT(text, fields, ignorarPrefixos) {
+  function extractTXT(text, fields, ignorarPrefixos, delimitador) {
+    if (delimitador) return { data: text, entries: scanTXTBlocks(text, delimitador) };
     const entries = fields.size === 0 ? scanTXTLines(text, ignorarPrefixos) : scanTXTFields(text, fields, ignorarPrefixos);
     return { data: text, entries };
   }
 
-  function applyTXT(text, edits, fieldsArr, ignorarPrefixos) {
+  /** Modo de blocos: uma linha que começa com o delimitador marca o
+   *  início de um item — tudo até a próxima linha de delimitador (pode
+   *  ser várias linhas) vira o valor daquele item, quebras de linha
+   *  preservadas. O que vem depois do delimitador na própria linha
+   *  (ex: o número "2001" em "\\\\... 2001") vira o ID do item — assim
+   *  fica estável mesmo que a ordem dos blocos mude. */
+  function scanTXTBlocks(text, delimitador) {
+    const lineSpans = [];
+    let i = 0;
+    const n = text.length;
+    while (true) {
+      const start = i;
+      while (i < n && text[i] !== "\n") i++;
+      let end = i;
+      if (end > start && text[end - 1] === "\r") end--;
+      lineSpans.push({ start, end });
+      if (i >= n) break;
+      i++; // pula o \n
+    }
+
+    const delimLines = [];
+    lineSpans.forEach((span, idx) => {
+      const lineText = text.slice(span.start, span.end);
+      const trimmed = lineText.replace(/^[ \t]+/, "");
+      if (trimmed.startsWith(delimitador)) {
+        const id = trimmed.slice(delimitador.length).trim();
+        delimLines.push({ idx, id: id || `bloco#${delimLines.length}` });
+      }
+    });
+
+    const entries = [];
+    for (let d = 0; d < delimLines.length; d++) {
+      const blockStartLine = delimLines[d].idx + 1;
+      const blockEndLine = d + 1 < delimLines.length ? delimLines[d + 1].idx : lineSpans.length;
+      if (blockStartLine >= blockEndLine) continue; // marcador sem conteúdo depois (ex: EOF)
+      const start = lineSpans[blockStartLine].start;
+      const end = lineSpans[blockEndLine - 1].end;
+      const value = text.slice(start, end);
+      if (value.trim() === "") continue;
+      entries.push({ id: delimLines[d].id, value, start, end });
+    }
+    return entries;
+  }
+
+  function applyTXTBlocks(text, edits, delimitador) {
+    const entries = scanTXTBlocks(text, delimitador);
+    const targets = entries.filter((e) => edits.has(e.id)).sort((a, b) => b.start - a.start);
+    let result = text;
+    targets.forEach((e) => {
+      result = result.slice(0, e.start) + edits.get(e.id) + result.slice(e.end);
+    });
+    return result;
+  }
+
+  function applyTXT(text, edits, fieldsArr, ignorarPrefixos, delimitador) {
+    if (delimitador) return applyTXTBlocks(text, edits, delimitador);
     const entries =
       fieldsArr.length === 0 ? scanTXTLines(text, ignorarPrefixos) : scanTXTFields(text, new Set(fieldsArr), ignorarPrefixos);
     const targets = entries.filter((e) => edits.has(e.id)).sort((a, b) => b.start - a.start);
@@ -259,19 +315,19 @@ RT.parse = (() => {
   }
 
   /* ---------------- despachante por formato ---------------- */
-  function extract(format, text, fieldsArr, ignorarPrefixos = []) {
+  function extract(format, text, fieldsArr, ignorarPrefixos = [], delimitador = "") {
     const fields = new Set(fieldsArr);
     if (format === "json") return extractJSON(text, fields);
     if (format === "xml") return extractXML(text, fields);
-    if (format === "txt") return extractTXT(text, fields, ignorarPrefixos);
+    if (format === "txt") return extractTXT(text, fields, ignorarPrefixos, delimitador);
     if (format === "csv") return extractCSV(text, fields);
     throw new Error("Formato não suportado: " + format);
   }
 
-  function apply(format, data, edits, fieldsArr, ignorarPrefixos = []) {
+  function apply(format, data, edits, fieldsArr, ignorarPrefixos = [], delimitador = "") {
     if (format === "json") return applyJSON(data, edits, fieldsArr);
     if (format === "xml") return applyXML(data, edits);
-    if (format === "txt") return applyTXT(data, edits, fieldsArr, ignorarPrefixos);
+    if (format === "txt") return applyTXT(data, edits, fieldsArr, ignorarPrefixos, delimitador);
     if (format === "csv") return applyCSV(data, edits, fieldsArr);
     throw new Error("Formato não suportado: " + format);
   }
