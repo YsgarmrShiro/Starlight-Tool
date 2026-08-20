@@ -276,16 +276,17 @@ code{ background:var(--panel-alt); padding:1px 6px; border-radius:5px; font-fami
 .entry__original{ font-family:var(--mono); font-size:13px; line-height:1.6; white-space:pre-wrap; color:var(--text-dim); background:var(--panel-alt); border-radius:var(--radius-sm); padding:11px 13px; }
 .entry__translation{ font-family:var(--sans); font-size:13.5px; line-height:1.6; color:var(--text); background:var(--panel-alt); border:1px solid var(--border); border-radius:var(--radius-sm); padding:11px 13px; resize:vertical; min-height:60px; }
 
-.entry__translation-wrap{ position:relative; }
+.entry__translation-wrap{ position:relative; width:100%; }
 .entry__translation-wrap .entry__translation{ position:relative; z-index:1; }
 .entry__translation.has-limit{
+  width:100%; box-sizing:border-box;
   background:transparent; color:transparent; caret-color:var(--text);
   white-space:pre; overflow:auto;
 }
 .entry__translation-highlight{
   position:absolute; inset:0; z-index:0;
   font-family:var(--sans); font-size:13.5px; line-height:1.6; padding:11px 13px;
-  border:1px solid transparent; border-radius:var(--radius-sm);
+  border:1px solid transparent; border-radius:var(--radius-sm); box-sizing:border-box;
   white-space:pre; overflow:hidden; pointer-events:none; color:var(--text);
 }
 .entry__translation-highlight .char-over{ color:var(--danger); background:var(--danger-dim); border-radius:2px; }
