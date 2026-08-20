@@ -93,6 +93,17 @@ repositório da ferramenta), cada jogo tem:
     - `csv`: **números das colunas**, começando em 0 (ex: `0, 2` pra
       pegar a primeira e a terceira coluna). CSV não tem nome de campo,
       só posição.
+  - **Limite de caracteres por linha** (opcional, qualquer formato): se
+    preenchido, a tela de revisão passa a mostrar um contador
+    "N/limite" depois de cada linha da tradução, e o trecho que passar
+    do limite fica destacado em vermelho — **por linha**, não pelo item
+    inteiro (então num item de várias linhas, tipo os de "delimitador de
+    blocos", cada linha é conferida separadamente). Isso não trava nem
+    impede de digitar além do limite, é só um aviso visual. Quando esse
+    campo está preenchido, o campo de tradução também para de quebrar
+    linha automaticamente (rola pro lado em vez de quebrar) — assim cada
+    linha de verdade do texto sempre ocupa uma linha visual só, e o
+    contador fica alinhado certinho com ela.
 
 A ferramenta varre o arquivo original e o traduzido em paralelo (eles
 precisam ter a mesma estrutura) e casa um trecho de texto do original com o

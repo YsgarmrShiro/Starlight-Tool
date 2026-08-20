@@ -296,6 +296,7 @@ function openGameForm(index) {
     rowEl.querySelector(".sp-campos").value = (sub?.campos || []).join(", ");
     rowEl.querySelector(".sp-ignorar").value = (sub?.ignorarPrefixos || []).join(", ");
     rowEl.querySelector(".sp-delimitador").value = sub?.delimitador || "";
+    rowEl.querySelector(".sp-limite").value = sub?.limiteCaracteres || "";
     rowEl.querySelector(".sp-remove").addEventListener("click", () => rowEl.remove());
     subList.appendChild(rowEl);
   }
@@ -329,6 +330,7 @@ function openGameForm(index) {
         .map((s) => s.trim())
         .filter(Boolean),
       delimitador: row.querySelector(".sp-delimitador").value.trim(),
+      limiteCaracteres: parseInt(row.querySelector(".sp-limite").value, 10) || null,
     }));
     const updated = {
       nome: form.querySelector(".gf-nome").value.trim(),
@@ -1962,10 +1964,38 @@ function passesFilter(e) {
   return true;
 }
 
+/** Monta a sobreposição colorida por trás do textarea: cada linha (\n)
+ *  é conferida separadamente contra o limite — o trecho que passa do
+ *  limite fica destacado em vermelho, e um contador "N/limite" aparece
+ *  logo depois de cada linha. */
+function updateCharLimitHighlight(holder, text, limite) {
+  const lines = text.split("\n");
+  holder.innerHTML = lines
+    .map((line) => {
+      const len = line.length;
+      const countClass = len > limite ? "char-count char-count--over" : "char-count";
+      if (len > limite) {
+        const ok = escapeHtml(line.slice(0, limite));
+        const over = escapeHtml(line.slice(limite));
+        return `${ok}<span class="char-over">${over}</span><span class="${countClass}">${len}/${limite}</span>`;
+      }
+      return `${escapeHtml(line)}<span class="${countClass}">${len}/${limite}</span>`;
+    })
+    .join("\n");
+}
+
 function renderEntryCard(e) {
   const card = document.createElement("article");
   card.className = "entry";
   card.dataset.status = e.status;
+
+  const limite = RT.state.file?.sub?.limiteCaracteres || 0;
+  const translationHtml = limite
+    ? `<div class="entry__translation-wrap">
+         <div class="entry__translation-highlight" aria-hidden="true"></div>
+         <textarea class="entry__translation has-limit" rows="3" spellcheck="false">${escapeHtml(e.translation)}</textarea>
+       </div>`
+    : `<textarea class="entry__translation" rows="3">${escapeHtml(e.translation)}</textarea>`;
 
   card.innerHTML = `
     <div class="entry__col">
@@ -1974,7 +2004,7 @@ function renderEntryCard(e) {
     </div>
     <div class="entry__col">
       <span class="entry__label">Tradução</span>
-      <textarea class="entry__translation" rows="3">${escapeHtml(e.translation)}</textarea>
+      ${translationHtml}
     </div>
     <div class="entry__footer">
       <div class="status-btns">
@@ -1987,10 +2017,21 @@ function renderEntryCard(e) {
     </div>
   `;
 
-  card.querySelector(".entry__translation").addEventListener("input", (ev) => {
+  const textarea = card.querySelector(".entry__translation");
+  const highlight = card.querySelector(".entry__translation-highlight");
+  if (limite && highlight) updateCharLimitHighlight(highlight, textarea.value, limite);
+
+  textarea.addEventListener("input", (ev) => {
     e.translation = ev.target.value;
+    if (limite && highlight) updateCharLimitHighlight(highlight, ev.target.value, limite);
     markDirty();
   });
+  if (limite && highlight) {
+    textarea.addEventListener("scroll", () => {
+      highlight.scrollTop = textarea.scrollTop;
+      highlight.scrollLeft = textarea.scrollLeft;
+    });
+  }
   card.querySelector(".entry__comment").addEventListener("input", (ev) => {
     e.comment = ev.target.value;
     markDirty();

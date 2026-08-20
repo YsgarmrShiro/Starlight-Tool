@@ -151,7 +151,7 @@ code{ background:var(--panel-alt); padding:1px 6px; border-radius:5px; font-fami
 .subpasta-block{ display:flex; flex-direction:column; gap:6px; padding-bottom:8px; border-bottom:1px solid var(--border); }
 .subpasta-block:last-child{ border-bottom:none; padding-bottom:0; }
 .subpasta-row{ display:grid; grid-template-columns:1fr 100px 2fr auto; gap:8px; align-items:center; }
-.subpasta-row2{ display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+.subpasta-row2{ display:grid; grid-template-columns:1fr 1fr 160px; gap:8px; }
 .subpasta-row input, .subpasta-row select, .subpasta-row2 input{ background:var(--panel-alt); border:1px solid var(--border); border-radius:var(--radius-sm); padding:8px 10px; color:var(--text); font-size:13px; }
 .game-form__actions{ display:flex; gap:8px; margin-top:6px; }
 
@@ -275,6 +275,22 @@ code{ background:var(--panel-alt); padding:1px 6px; border-radius:5px; font-fami
 .entry__id{ font-family:var(--mono); font-size:10px; color:var(--text-faint); }
 .entry__original{ font-family:var(--mono); font-size:13px; line-height:1.6; white-space:pre-wrap; color:var(--text-dim); background:var(--panel-alt); border-radius:var(--radius-sm); padding:11px 13px; }
 .entry__translation{ font-family:var(--sans); font-size:13.5px; line-height:1.6; color:var(--text); background:var(--panel-alt); border:1px solid var(--border); border-radius:var(--radius-sm); padding:11px 13px; resize:vertical; min-height:60px; }
+
+.entry__translation-wrap{ position:relative; }
+.entry__translation-wrap .entry__translation{ position:relative; z-index:1; }
+.entry__translation.has-limit{
+  background:transparent; color:transparent; caret-color:var(--text);
+  white-space:pre; overflow:auto;
+}
+.entry__translation-highlight{
+  position:absolute; inset:0; z-index:0;
+  font-family:var(--sans); font-size:13.5px; line-height:1.6; padding:11px 13px;
+  border:1px solid transparent; border-radius:var(--radius-sm);
+  white-space:pre; overflow:hidden; pointer-events:none; color:var(--text);
+}
+.entry__translation-highlight .char-over{ color:var(--danger); background:var(--danger-dim); border-radius:2px; }
+.entry__translation-highlight .char-count{ margin-left:10px; font-size:10px; color:var(--text-faint); user-select:none; }
+.entry__translation-highlight .char-count--over{ color:var(--danger); font-weight:600; }
 .entry__translation:focus{ border-color:var(--accent); }
 .entry__footer{ grid-column:1 / -1; display:flex; align-items:center; gap:10px; flex-wrap:wrap; border-top:1px solid var(--border); padding-top:14px; }
 .status-btns{ display:flex; gap:6px; }
