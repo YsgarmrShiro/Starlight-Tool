@@ -66,5 +66,23 @@
         "limiteCaracteres": 50
       }
     ]
+  },
+  {
+    "nome": "Temp",
+    "owner": "Ysgarmrshiro",
+    "repo": "Temp",
+    "branch": "main",
+    "subpastas": [
+      {
+        "caminho": "a",
+        "formato": "json",
+        "campos": [
+          "v"
+        ],
+        "ignorarPrefixos": [],
+        "delimitador": "",
+        "limiteCaracteres": null
+      }
+    ]
   }
 ]
